@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*~
+venv/
+.env
+
+# ROS2 Build-Dateien (falls du sie aus Versehen hier drin hast)
+build/
+install/
+log/
+
+# KI-Modelle (wir laden nur den Code hoch, nicht die hunderte MB großen Modelle)
+*.zip
+sailboat_tensorboard/
