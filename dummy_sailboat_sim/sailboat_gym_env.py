@@ -6,17 +6,19 @@ from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 import math
-import time
+from dummy_sailboat_sim.config import Config
+from std_srvs.srv import Empty
 
 class SailboatEnv(gym.Env):
     """
     Gymnasium Umgebung für ein Segelboot.
-    Reward-Logik: Fortschritt zum Ziel (Differenz der Entfernung).
+    Reward-Logik: Fortschritt zum Ziel + Action Smoothing (Delta Control).
     """
     def __init__(self):
         super(SailboatEnv, self).__init__()
 
-        # --- 1. ACTION SPACE ---
+        # --- 1. ACTION SPACE (Delta Control) ---
+        # Die KI gibt keine absoluten Winkel mehr aus, sondern ÄNDERUNGSRATEN (-1.0 bis 1.0)
         self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
 
         # --- 2. OBSERVATION SPACE ---
@@ -37,16 +39,21 @@ class SailboatEnv(gym.Env):
         self.current_odom = None
         self.current_wind = None
 
-        # Publisher für das aktuelle Ziel (damit der Visualizer es zeichnen kann)
         self.pub_target = self.node.create_publisher(Vector3, '/navigation/target', 10)
         
-        # Zielpunkt (50m in X-Richtung)
+        # Vorerst fester Zielpunkt (wie gewünscht)
         self.target_pos = np.array([40.0, 30.0])
         
-        # Speicher für die Entfernung im letzten Schritt
         self.prev_dist = 0.0
-        self.current_step = 0 # NEU: Schrittzähler
-        self.max_steps = 500  # NEU: Maximale Schritte pro Versuch
+        self.current_step = 0
+
+        self.reset_client = self.node.create_client(Empty, '/reset_simulation')
+        
+        self.max_steps = Config.MAX_EPISODE_STEPS 
+
+        # NEU: Gedächtnis für die Delta-Steuerung (Wo stehen die Servos aktuell?)
+        self.current_rudder = Config.INITIAL_RUDDER_ANGLE
+        self.current_sail = Config.INITIAL_SAIL_ANGLE
 
     def _odom_cb(self, msg):
         self.current_odom = msg
@@ -71,70 +78,91 @@ class SailboatEnv(gym.Env):
         return np.array([obs_x, obs_y, obs_v_lin, obs_v_ang, obs_wind_s, obs_wind_a], dtype=np.float32)
 
     def step(self, action):
-        # 1. Mapping
-        rudder_val = float(action[0] * 0.785)
-        sail_val = float(((action[1] + 1.0) / 2.0) * math.pi)
 
-        # 2. Senden
-        self.pub_rudder.publish(Float64(data=rudder_val))
-        self.pub_sail.publish(Float64(data=sail_val))
+        # action[0] ist die gewünschte Änderung (-1 bis 1)
+        rudder_delta = action[0] * Config.MAX_RUDDER_DELTA
+        sail_delta = action[1] * Config.MAX_SAIL_DELTA
 
-        # 3. Warten auf Physik
-        rclpy.spin_once(self.node, timeout_sec=0.05)
+        # Alten Wert nehmen und Delta draufrechnen
+        self.current_rudder += rudder_delta
+        self.current_sail += sail_delta
+
+        # Sicherstellen, dass das Ruder nicht über den mechanischen Anschlag (MAX_RUDDER_ANGLE) dreht
+        self.current_rudder = np.clip(self.current_rudder, -Config.MAX_RUDDER_ANGLE, Config.MAX_RUDDER_ANGLE)
+        self.current_sail = np.clip(self.current_sail, 0.0, Config.MAX_SAIL_ANGLE)
+
+        # Senden der neuen, weicheren Werte
+        self.pub_rudder.publish(Float64(data=float(self.current_rudder)))
+        self.pub_sail.publish(Float64(data=float(self.current_sail)))
+
+        # Warten auf Physik (Taktung aus Config)
+        rclpy.spin_once(self.node, timeout_sec=Config.STEP_TIME_SEC)
         
-        # 4. Observation & Reward
+        # Observation & Reward
         obs = self._get_obs()
         
-        # Aktuelle Position und Distanz berechnen
         pos = np.array([self.current_odom.pose.pose.position.x, self.current_odom.pose.pose.position.y])
         current_dist = np.linalg.norm(self.target_pos - pos)
         
-        # --- NEUE REWARD LOGIK ---
-        # Belohnung = Verringerung der Distanz (Fortschritt)
-        # Wenn current_dist < prev_dist, ist der Reward positiv.
+        # --- REWARD LOGIK ---
         reward = self.prev_dist - current_dist
-        
-        # Aktuelle Distanz für den nächsten Schritt speichern
         self.prev_dist = current_dist
 
-        # Das aktuelle Ziel veröffentlichen
+        reward += Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))
+        
+        reward += Config.REWARD_TIME_PENALTY
+
         self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
         
-        # Abbruchbedingungen
+        # Abbruchbedingungen (Werte aus Config)
         terminated = False
-        if current_dist < 5.0: # Ziel erreicht
-            reward += 20.0 # Bonus für Erfolg
+        if current_dist < Config.TARGET_REWARD_RADIUS: 
+            reward += Config.REWARD_SUCCESS 
             terminated = True
-        elif current_dist > 150.0: # Zu weit weg/verlaufen
-            reward -= 10.0
+        elif current_dist > Config.OUT_OF_BOUNDS_RADIUS: 
+            reward += Config.REWARD_FAIL
             terminated = True
 
-        # --- ZEITLIMIT PRÜFEN ---
         self.current_step += 1
         truncated = False
+
         if self.current_step >= self.max_steps:
             truncated = True 
             
-        # Wichtig: return-Zeile anpassen! (truncated statt False)
         return obs, float(reward), terminated, truncated, {}
 
     def reset(self, seed=None, options=None):
+
+        while not self.reset_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info('Warte auf Reset-Service...')
+    
+        # Den Teleport-Befehl senden
+        self.reset_client.call_async(Empty.Request())
+
         super().reset(seed=seed)
-        self.current_step = 0 # NEU: Zähler zurücksetzen
+        self.current_step = 0 
         
-        # Boot anhalten (Dummy-Reset)
-        self.pub_rudder.publish(Float64(data=0.0))
-        self.pub_sail.publish(Float64(data=0.0))
+        self.current_rudder = Config.INITIAL_RUDDER_ANGLE
+        self.current_sail = Config.INITIAL_SAIL_ANGLE
         
-        # Kurz warten, bis Daten fließen
+        self.pub_rudder.publish(Float64(data=float(self.current_rudder)))
+        self.pub_sail.publish(Float64(data=float(self.current_sail)))
+        
         for _ in range(5):
             rclpy.spin_once(self.node, timeout_sec=0.1)
+
+        rand_x = np.random.uniform(Config.TARGET_SPAWN_X[0], Config.TARGET_SPAWN_X[1])
+        rand_y = np.random.uniform(Config.TARGET_SPAWN_Y[0], Config.TARGET_SPAWN_Y[1])
+        self.target_pos = np.array([rand_x, rand_y])
         
-        # Initialdistanz für den ersten Schritt im neuen Lauf setzen
+        # Dem Visualizer sofort mitteilen, wo das neue Ziel ist
+        self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
+
+        
         if self.current_odom is not None:
             pos = np.array([self.current_odom.pose.pose.position.x, self.current_odom.pose.pose.position.y])
             self.prev_dist = np.linalg.norm(self.target_pos - pos)
         else:
-            self.prev_dist = 50.0 # Standardwert
+            self.prev_dist = np.linalg.norm(self.target_pos - np.array([Config.START_X, Config.START_Y]))
 
         return self._get_obs(), {}

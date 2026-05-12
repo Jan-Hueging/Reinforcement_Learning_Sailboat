@@ -47,8 +47,10 @@ class VisualizerNode(Node):
         self.target_x = 0.0
         self.target_y = 0.0
 
-        # Subscriber für das Ziel-Topic
+        # Subscriber
         self.create_subscription(Vector3, '/navigation/target', self.target_cb, 10)
+        self.create_subscription(Float64, '/cmd_rudder', self.cmd_rudder_cb, 10)
+        self.create_subscription(Float64, '/cmd_sail', self.cmd_sail_cb, 10)
 
     def odom_cb(self, msg):
         self.x = msg.pose.pose.position.x
@@ -120,8 +122,8 @@ class VisualizerNode(Node):
         
         # Wind-Pfeil (Blau) - Korrigiert: Zeigt jetzt wohin der Wind WEHT
         global_wind_angle = self.theta + self.wind_angle
-        wind_x = int(px - math.cos(global_wind_angle) * (self.wind_speed * 5))
-        wind_y = int(py + math.sin(global_wind_angle) * (self.wind_speed * 5))
+        wind_x = int(px + math.cos(global_wind_angle) * (self.wind_speed * 5))
+        wind_y = int(py - math.sin(global_wind_angle) * (self.wind_speed * 5))
         cv2.line(img, (px, py), (wind_x, wind_y), (255, 0, 0), 2)
 
         # --- RUDER (Rot) ---
@@ -157,6 +159,14 @@ class VisualizerNode(Node):
     def target_cb(self, msg):
         self.target_x = msg.x
         self.target_y = msg.y
+
+    def cmd_rudder_cb(self, msg):
+        # Aktualisiert die Anzeige im Radar
+        self.current_rudder = msg.data
+
+    def cmd_sail_cb(self, msg):
+        # Aktualisiert die Anzeige im Radar
+        self.current_sail = msg.data
         
 def main(args=None):
     rclpy.init(args=args)

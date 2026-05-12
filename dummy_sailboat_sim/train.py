@@ -1,36 +1,65 @@
 import rclpy
 from stable_baselines3 import PPO
 from sailboat_gym_env import SailboatEnv # Importiert deine Umgebung
+from stable_baselines3.common.callbacks import BaseCallback
+from dummy_sailboat_sim.config import Config
+
+class ProgressLoggerCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super(ProgressLoggerCallback, self).__init__(verbose)
+        self.iteration_count = 0
+
+    def _on_step(self) -> bool:
+        # Wird bei jedem einzelnen Zeitschritt aufgerufe
+        return True
+
+    def _on_rollout_end(self) -> None:
+        # Wird exakt am Ende jeder Iteration (nach z.B. 2048 Schritten) aufgerufen
+        self.iteration_count += 1
+        total_steps = self.model.num_timesteps
+        print(f"\n--- 🏁 ITERATION {self.iteration_count} BEENDET | GESAMT-SCHRITTE (KILOMETERSTAND): {total_steps} ---")
 
 def main():
     print("🧠 Initialisiere KI-Training...")
     
-    # 1. ROS2 im Hintergrund starten (wichtig für die Kommunikation)
+    # 1. ROS2 im Hintergrund starten
     rclpy.init()
     
-    # 2. Die Umgebung (das Rückenmark) erschaffen
+    # 2. Die Umgebung (Mapping) erschaffen
     env = SailboatEnv()
     
     # 3. Das Gehirn (PPO Algorithmus) erschaffen
-    # "MlpPolicy" sagt der KI: Nutze ein Standard Neural Network
-    # verbose=1 sagt der KI: Gib uns Status-Updates im Terminal
-    model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003, n_steps=2048)
+    model = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        learning_rate=Config.LEARNING_RATE,
+        n_steps=Config.N_STEPS
+    )
     
-    print("🚀 Training startet jetzt! Beobachte das Radar-Fenster.")
+    # NEU: 3. Den Spion aktivieren und als Variable speichern
+    logger_callback = ProgressLoggerCallback()
+    
+    print(f"🚀 Training startet jetzt! Geplant: {Config.TOTAL_TIMESTEPS} Schritte.")
     
     try:
         # 4. Der eigentliche Trainings-Prozess
-        # 20.000 Schritte sind ein guter erster Test-Lauf (dauert ein paar Minuten)
-        model.learn(total_timesteps=20000)
+        model.learn(
+            total_timesteps=Config.TOTAL_TIMESTEPS,
+            callback=logger_callback,
+            reset_num_timesteps=False
+        )
         
         # 5. Gehirn speichern, wenn es fertig ist
-        model.save("sailboat_model_v1")
-        print("✅ Training beendet! Modell wurde als 'sailboat_model_v1.zip' gespeichert.")
+        model.save(Config.MODEL_NAME)
+        print(f"✅ Training beendet! Modell wurde als {Config.MODEL_NAME}.zip gespeichert.")
         
     except KeyboardInterrupt:
-        # Falls du das Training mit Strg+C abbrichst, speichert er trotzdem, was er gelernt hat!
+        # Falls das Training mit Strg+C abbricht, speichert er trotzdem
         print("\n⚠️ Training abgebrochen. Speichere bisherigen Fortschritt...")
-        model.save("sailboat_model_v1_interrupted")
+        interrupted_name = f"{Config.MODEL_NAME}_interrupted"
+        model.save(interrupted_name)
+        print(f"💾 Gespeichert unter: {interrupted_name}.zip")
         
     finally:
         # 6. Aufräumen

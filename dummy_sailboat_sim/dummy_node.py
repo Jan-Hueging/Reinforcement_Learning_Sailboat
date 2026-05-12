@@ -6,6 +6,8 @@ import math
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3 
+from dummy_sailboat_sim.config import Config
+from std_srvs.srv import Empty
 
 class DummySailboat(Node):
     def __init__(self):
@@ -14,20 +16,23 @@ class DummySailboat(Node):
         # ==========================================
         # 1. INTERNE ZUSTÄNDE (Physik-Variablen)
         # ==========================================
-        self.x = 0.0
-        self.y = 0.0
-        self.theta = 0.0      # Ausrichtung des Bootes (0 = nach Osten)
-        self.v = 0.0          # Vorwärtsgeschwindigkeit (m/s)
-        self.heel_angle = 0.0 # Krängung
+
+        self.x = Config.START_X         # Startposition X
+        self.y = Config.START_Y         # Startposition Y
+        self.theta = Config.START_THETA # Ausrichtung des Bootes (0 = nach Osten)
+        self.v = Config.START_V         # Vorwärtsgeschwindigkeit (m/s)
+        self.heel_angle = 0.0           # Krängung
         
         # Start-Werte für den Wind (werden durch Subscriber überschrieben)
-        self.true_wind_speed = 5.0      
-        self.true_wind_dir = math.pi    
+        self.true_wind_speed = Config.WIND_SPEED_DEFAULT     
+        self.true_wind_dir = Config.WIND_ANGLE_DEFAULT    
 
         # Aktuelle Inputs
         self.cmd_rudder = 0.0 
         self.cmd_sail = 0.0   
-        self.dt = 0.1 # 10 Hz
+        self.dt = Config.STEP_TIME_SEC
+
+        self.srv_reset = self.create_service(Empty, '/reset_simulation', self.reset_callback)
 
         # ==========================================
         # 2. SCHNITTSTELLEN: INPUTS (Subscriber)
@@ -66,7 +71,7 @@ class DummySailboat(Node):
     def update_physics(self):
         # 1. KINEMATIK
         # Drehung basierend auf Ruder und aktueller Fahrt
-        turn_rate = -self.cmd_rudder * self.v * 0.5 
+        turn_rate = -self.cmd_rudder * self.v * Config.DUMMY_RUDDER_EFFECT
         self.theta += turn_rate * self.dt
         
         # Position (Vektorzerlegung)
@@ -95,14 +100,14 @@ class DummySailboat(Node):
         efficiency = math.cos(self.cmd_sail - aw_angle_relative) 
         
         # Zielgeschwindigkeit (vereinfacht: 30% der Windgeschwindigkeit bei perfektem Segel)
-        target_v = aw_speed * 0.3 * max(0.0, efficiency) 
+        target_v = aw_speed * Config.DUMMY_SAIL_EFFICIENCY * max(0.0, efficiency) 
 
         
         # Trägheit (Dämpfung der Beschleunigung)
-        self.v += (target_v - self.v) * 0.1
+        self.v += (target_v - self.v) * Config.DUMMY_INERTIA
         
         # Krängung (Neigung zur Seite)
-        self.heel_angle = aw_speed * math.sin(aw_angle_relative) * 0.1
+        self.heel_angle = aw_speed * math.sin(aw_angle_relative) * Config.DUMMY_HEEL_STIFFNESS
 
         # ==========================================
         # 4. DATEN SENDEN
@@ -123,6 +128,17 @@ class DummySailboat(Node):
         odom.twist.twist.linear.x = float(self.v)
         odom.twist.twist.angular.z = float(turn_rate)
         self.pub_odom.publish(odom)
+
+    def reset_callback(self, request, response):
+        self.get_logger().info('🔄 Teleportiere Boot zurück zum Start...')
+        self.x = Config.START_X
+        self.y = Config.START_Y
+        self.theta = Config.START_THETA
+        self.v = Config.START_V
+        self.heel_angle = 0.0
+        self.cmd_rudder = 0.0
+        self.cmd_sail = Config.INITIAL_SAIL_ANGLE
+        return response
 
 def main(args=None):
     rclpy.init(args=args)
