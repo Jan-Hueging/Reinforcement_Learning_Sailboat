@@ -19,7 +19,7 @@ class VisualizerNode(Node):
         self.wind_speed, self.wind_angle = 0.0, 0.0
         self.scale = 15.0
         self.current_rudder = 0.0
-        self.current_sail = math.pi  # Startwert: halb aufgefiert 
+        self.current_sail = math.pi  # Standardwert: halb aufgefiert 
         self.debug_true_wind_speed = 5.0
         self.debug_true_wind_angle = math.pi
 
@@ -36,7 +36,7 @@ class VisualizerNode(Node):
         cv2.createTrackbar('Ruder (-1 bis 1)', self.window_name, 100, 200, self.update_controls)
         cv2.createTrackbar('Segel (-1 bis 1)', self.window_name, 200, 200, self.update_controls)
         
-        # Schieberegler für das Wetter (God-Mode)
+        # Schieberegler für das Wetter
         cv2.createTrackbar('Wind Speed (m/s)', self.window_name, 5, 20, self.update_weather)
         cv2.createTrackbar('Wind Angle (Deg)', self.window_name, 180, 360, self.update_weather)
 
@@ -47,7 +47,7 @@ class VisualizerNode(Node):
         self.target_x = 0.0
         self.target_y = 0.0
 
-        # Subscriber
+        # Subscriber Ruder, Segel & Ziel
         self.create_subscription(Vector3, '/navigation/target', self.target_cb, 10)
         self.create_subscription(Float64, '/cmd_rudder', self.cmd_rudder_cb, 10)
         self.create_subscription(Float64, '/cmd_sail', self.cmd_sail_cb, 10)
@@ -65,7 +65,7 @@ class VisualizerNode(Node):
         self.wind_angle = msg.y 
 
     def update_controls(self, _):
-        # Lese Regler aus
+        # Regler auslesen
         val_rudder = cv2.getTrackbarPos('Ruder (-1 bis 1)', self.window_name)
         val_sail = cv2.getTrackbarPos('Segel (-1 bis 1)', self.window_name)
         
@@ -80,18 +80,18 @@ class VisualizerNode(Node):
         self.pub_sail.publish(Float64(data=echtes_segel))
 
     def update_weather(self, _):
-        # Lese Wetter-Regler aus
+        # Wetter-Regler auslesen
         w_speed = float(cv2.getTrackbarPos('Wind Speed (m/s)', self.window_name))
         w_angle_deg = float(cv2.getTrackbarPos('Wind Angle (Deg)', self.window_name))
         
         # In Radiant umrechnen
         w_angle_rad = math.radians(w_angle_deg)
         
-        # LOKAL SPEICHERN für die Grafik
+        # Lokal speichern für die Grafik
         self.debug_true_wind_speed = w_speed
         self.debug_true_wind_angle = w_angle_rad
         
-        # AN ROS2 SENDEN
+        # An ROS2 senden
         self.pub_weather.publish(Vector3(x=w_speed, y=w_angle_rad, z=0.0))
 
     def render_loop(self):
@@ -102,31 +102,30 @@ class VisualizerNode(Node):
         px = int(cx + self.x * self.scale) % 600
         py = int(cy - self.y * self.scale) % 600
 
-        # --- DYNAMISCHER ZIELPUNKT (Gelb) ---
-        # Wir nutzen jetzt self.target_x/y, die über das Topic kommen
+        # Dynamischer Zielpunkt
         t_px = int(cx + self.target_x * self.scale) % 600
         t_py = int(cy - self.target_y * self.scale) % 600
         
-        # Zeichne Ziel-Kreis und Text
+        # Ziel-Kreis und Text zeichnen
         cv2.circle(img, (t_px, t_py), 8, (0, 255, 255), -1) 
         cv2.putText(img, f"ZIEL ({self.target_x:.1f}, {self.target_y:.1f})", 
                     (t_px + 12, t_py - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
-        # Boot-Körper
+        # Bootskörper zeichnen
         cv2.circle(img, (px, py), 10, (0, 255, 0), -1) 
         
-        # Nase (Fahrtrichtung)
+        # Fahrtrichtung zeichnen
         nose_x = int(px + math.cos(self.theta) * 25)
         nose_y = int(py - math.sin(self.theta) * 25)
         cv2.line(img, (px, py), (nose_x, nose_y), (0, 255, 0), 2)
         
-        # Wind-Pfeil (Blau) - Korrigiert: Zeigt jetzt wohin der Wind WEHT
+        # Wind-Pfeil zeichnen
         global_wind_angle = self.theta + self.wind_angle
         wind_x = int(px + math.cos(global_wind_angle) * (self.wind_speed * 5))
         wind_y = int(py - math.sin(global_wind_angle) * (self.wind_speed * 5))
         cv2.line(img, (px, py), (wind_x, wind_y), (255, 0, 0), 2)
 
-        # --- RUDER (Rot) ---
+        # Ruder zeichnen
         stern_x = int(px - math.cos(self.theta) * 10)
         stern_y = int(py + math.sin(self.theta) * 10)
         rudder_angle = self.theta + self.current_rudder
@@ -134,18 +133,18 @@ class VisualizerNode(Node):
         rudder_end_y = int(stern_y + math.sin(rudder_angle) * 12)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (0, 0, 255), 3)
 
-        # --- SEGEL (Weiß) ---
+        # Segel zeichnen
         sail_angle = self.theta - self.current_sail
         sail_end_x = int(px - math.cos(sail_angle) * 10)
         sail_end_y = int(py + math.sin(sail_angle) * 10)
         cv2.line(img, (px, py), (sail_end_x, sail_end_y), (255, 255, 255), 2)
 
-        # --- TELEMETRIE TEXTE ---
+        # Texte für Telemetrie darstellen
         cv2.putText(img, f"Speed: {self.speed:.2f} m/s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(img, f"Wind: {self.wind_speed:.1f} m/s", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 200, 0), 2)
         cv2.putText(img, f"Ruder: {math.degrees(self.current_rudder):.0f} Deg", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        # --- GLOBALER WIND-INDIKATOR (Oben Rechts) ---
+        # Globalen Windindikator zeichnen
         compass_cx, compass_cy = 540, 60
         cv2.circle(img, (compass_cx, compass_cy), 30, (50, 50, 50), 1)
         tw_end_x = int(compass_cx - math.cos(self.debug_true_wind_angle) * 25)
@@ -161,11 +160,11 @@ class VisualizerNode(Node):
         self.target_y = msg.y
 
     def cmd_rudder_cb(self, msg):
-        # Aktualisiert die Anzeige im Radar
+        # Aktualisiert Ruder-Anzeige im Radar
         self.current_rudder = msg.data
 
     def cmd_sail_cb(self, msg):
-        # Aktualisiert die Anzeige im Radar
+        # Aktualisiert Segel-Anzeige im Radar
         self.current_sail = msg.data
         
 def main(args=None):

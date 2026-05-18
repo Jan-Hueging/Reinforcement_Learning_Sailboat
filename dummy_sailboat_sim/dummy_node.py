@@ -34,26 +34,28 @@ class DummySailboat(Node):
 
         self.srv_reset = self.create_service(Empty, '/reset_simulation', self.reset_callback)
 
+
         # ==========================================
         # 2. SCHNITTSTELLEN: INPUTS (Subscriber)
         # ==========================================
+
         self.sub_rudder = self.create_subscription(Float64, '/cmd_rudder', self.rudder_cb, 10)
         self.sub_sail = self.create_subscription(Float64, '/cmd_sail', self.sail_cb, 10)
-        
-        # DAS NEUE WETTER-OHR:
         self.sub_true_wind = self.create_subscription(Vector3, '/debug/true_wind', self.true_wind_cb, 10)
+
 
         # ==========================================
         # 3. SCHNITTSTELLEN: OUTPUTS (Publisher)
         # ==========================================
+
         self.pub_odom = self.create_publisher(Odometry, '/sensors/odom', 10)
         self.pub_wind = self.create_publisher(Vector3, '/sensors/apparent_wind', 10)
         self.pub_heel = self.create_publisher(Float64, '/sensors/heel_angle', 10)
-        
         self.timer = self.create_timer(self.dt, self.update_physics)
+
         self.get_logger().info('⚓ Dummy-Boot mit dynamischem Wind gestartet!')
 
-    # --- Callbacks für die Inputs ---
+    # --- Callbacks für Inputs ---
     def rudder_cb(self, msg):
         self.cmd_rudder = msg.data
 
@@ -61,15 +63,15 @@ class DummySailboat(Node):
         self.cmd_sail = msg.data
 
     def true_wind_cb(self, msg):
-        """ Empfängt Winddaten vom God-Mode Visualizer """
+        """Winddaten vom Visualizer empfangen"""
         self.true_wind_speed = msg.x
         self.true_wind_dir = msg.y
-        # Kleines Feedback im Terminal
         # self.get_logger().info(f'Wind geändert: {msg.x}m/s bei {math.degrees(msg.y):.1f}°')
 
-    # --- Das Herzstück: Die Physik-Simulation  ---
+    # --- Physik-Simulation  ---
     def update_physics(self):
-        # 1. KINEMATIK
+
+        # 1. Kinematik
         # Drehung basierend auf Ruder und aktueller Fahrt
         turn_rate = -self.cmd_rudder * self.v * Config.DUMMY_RUDDER_EFFECT
         self.theta += turn_rate * self.dt
@@ -78,41 +80,41 @@ class DummySailboat(Node):
         self.x += self.v * math.cos(self.theta) * self.dt
         self.y += self.v * math.sin(self.theta) * self.dt
 
-        # 2. GEFÜHLTER WIND (Apparent Wind) 
-        # Berechnet aus Wahrem Wind (True Wind) minus Eigenbewegung (Fahrtwind)
+        # 2. Gefühlter Wind 
         tw_x = self.true_wind_speed * math.cos(self.true_wind_dir)
         tw_y = self.true_wind_speed * math.sin(self.true_wind_dir)
-        
         bw_x = -self.v * math.cos(self.theta)
         bw_y = -self.v * math.sin(self.theta)
         
+        # Beschleunigung und Geschwindigkeitsupdate
         aw_x, aw_y = tw_x + bw_x, tw_y + bw_y
         aw_speed = math.sqrt(aw_x**2 + aw_y**2)
         
-        # Relativer Windwinkel zur Bootsnase
+        # Relativer Windwinkel zu Bootsnase
         aw_dir_global = math.atan2(aw_y, aw_x)
         aw_angle_relative = aw_dir_global - self.theta
         aw_angle_relative = (aw_angle_relative + math.pi) % (2 * math.pi) - math.pi
 
-        # 3. ANTRIEB & EFFIZIENZ
-        # Hier wird die Segelstellung (cmd_sail) mit dem Windwinkel (aw_angle_relative) verglichen.
-        # Ein Cosinus von 0 (Winkeldifferenz = 0) bedeutet 100% Effizienz.
+        # 3. Antrieb & Effizienz
+        # Cosinus von 0 bedeutet 100% Effizienz
         efficiency = math.cos(self.cmd_sail - aw_angle_relative) 
         
-        # Zielgeschwindigkeit (vereinfacht: 30% der Windgeschwindigkeit bei perfektem Segel)
+        # Zielgeschwindigkeit (30% der Windgeschwindigkeit bei perfektem Segel)
         target_v = aw_speed * Config.DUMMY_SAIL_EFFICIENCY * max(0.0, efficiency) 
 
         
-        # Trägheit (Dämpfung der Beschleunigung)
+        # Trägheit
         self.v += (target_v - self.v) * Config.DUMMY_INERTIA
         
         # Krängung (Neigung zur Seite)
         self.heel_angle = aw_speed * math.sin(aw_angle_relative) * Config.DUMMY_HEEL_STIFFNESS
 
+
         # ==========================================
         # 4. DATEN SENDEN
         # ==========================================
-        # Scheinbarer Wind (Wichtig für die KI!)
+
+        # Scheinbarer Wind
         self.pub_wind.publish(Vector3(x=float(aw_speed), y=float(aw_angle_relative), z=0.0))
         
         # Krängung

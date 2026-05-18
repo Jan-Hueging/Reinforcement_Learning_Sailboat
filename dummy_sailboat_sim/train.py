@@ -10,11 +10,11 @@ class ProgressLoggerCallback(BaseCallback):
         self.iteration_count = 0
 
     def _on_step(self) -> bool:
-        # Wird bei jedem einzelnen Zeitschritt aufgerufe
+        # Wird bei jedem einzelnen Zeitschritt aufgerufen
         return True
 
     def _on_rollout_end(self) -> None:
-        # Wird exakt am Ende jeder Iteration (nach z.B. 2048 Schritten) aufgerufen
+        # Wird am Ende jeder Iteration aufgerufen
         self.iteration_count += 1
         total_steps = self.model.num_timesteps
         print(f"\n--- 🏁 ITERATION {self.iteration_count} BEENDET | GESAMT-SCHRITTE (KILOMETERSTAND): {total_steps} ---")
@@ -25,10 +25,10 @@ def main():
     # 1. ROS2 im Hintergrund starten
     rclpy.init()
     
-    # 2. Die Umgebung (Mapping) erschaffen
+    # 2. Umgebung (Mapping) erstellen
     env = SailboatEnv()
     
-    # 3. Das Gehirn (PPO Algorithmus) erschaffen
+    # 3. Gehirn (PPO Algorithmus) erstellen
     model = PPO(
         "MlpPolicy",
         env,
@@ -37,25 +37,25 @@ def main():
         n_steps=Config.N_STEPS
     )
     
-    # NEU: 3. Den Spion aktivieren und als Variable speichern
+    # 3. "Spion" aktivieren & als Variable speichern
     logger_callback = ProgressLoggerCallback()
     
     print(f"🚀 Training startet jetzt! Geplant: {Config.TOTAL_TIMESTEPS} Schritte.")
     
     try:
-        # 4. Der eigentliche Trainings-Prozess
+        # 4. Eigentlicher Trainings-Prozess
         model.learn(
             total_timesteps=Config.TOTAL_TIMESTEPS,
             callback=logger_callback,
             reset_num_timesteps=False
         )
         
-        # 5. Gehirn speichern, wenn es fertig ist
+        # 5. Speichern, wenn fertig
         model.save(Config.MODEL_NAME)
         print(f"✅ Training beendet! Modell wurde als {Config.MODEL_NAME}.zip gespeichert.")
         
     except KeyboardInterrupt:
-        # Falls das Training mit Strg+C abbricht, speichert er trotzdem
+        # Falls das Training mit Strg+C abbricht trotzdem speichern
         print("\n⚠️ Training abgebrochen. Speichere bisherigen Fortschritt...")
         interrupted_name = f"{Config.MODEL_NAME}_interrupted"
         model.save(interrupted_name)
