@@ -6,7 +6,7 @@ Wir entwickeln die Funktion iterativ in 3 Stufen, um sicherzustellen, dass die K
 
 ---
 
-## 🎯 Stufe 1: Basic Navigation (VMG & Terminal Rewards)
+## ✅ Stufe 1: Basic Navigation (VMG & Terminal Rewards) - **ABGESCHLOSSEN**
 **Ziel:** Das Boot soll lernen, sich überhaupt in Richtung des Ziels zu bewegen, auch wenn es gegen den Wind kreuzen muss.
 
 ### Mathematischer Ansatz: VMG (Velocity Made Good)
@@ -17,9 +17,9 @@ Anstatt nur die absolute Distanz zu belohnen, belohnen wir die **effektive Gesch
 - Fährt das Boot vom Ziel weg: VMG ist negativ (Strafe).
 
 ### ToDos Stufe 1
-- [ ] Signatur der `calculate()` Funktion in `reward_calculator.py` anpassen, sodass sie nicht nur Distanzen, sondern auch `v_linear` und `angle_to_target` empfängt.
-- [ ] VMG-Formel implementieren und als primären dichten Reward ausgeben.
-- [ ] Terminal Rewards anpassen (+100 für Ziel, -50 für Out of Bounds).
+- [x] Signatur der `calculate()` Funktion in `reward_calculator.py` anpassen, sodass sie nicht nur Distanzen, sondern auch `v_linear` und `angle_to_target` empfängt.
+- [x] VMG-Formel implementieren und als primären dichten Reward ausgeben.
+- [x] Terminal Rewards anpassen (+100 für Ziel, -50 für Out of Bounds).
 
 ---
 
@@ -49,4 +49,4 @@ Anstatt nur die absolute Distanz zu belohnen, belohnen wir die **effektive Gesch
 - [ ] Parameter (Gewichtungen) so tunen, dass das Boot rechtzeitig das Segel öffnet (auffiert), um nicht zu kentern.
 
 ---
-*Letztes Update: Vorbereitung für Stufe 1*
+*Letztes Update: Stufe 1 erfolgreich abgeschlossen*
