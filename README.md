@@ -68,13 +68,37 @@ Für den Lernprozess ist der parallele Betrieb von Simulation und Trainingsskrip
 
 ---
 
+## 📡 ROS2 Topics (Bridge Architektur)
+
+Die Simulation und die KI sind durch eine saubere **Bridge-Architektur** (`sailboat_gym_env.py`) getrennt. Die Kommunikation erfolgt ausschließlich über standardisierte ROS2-Topics. So kann das trainierte Modell später ohne Code-Änderungen vom Dummy direkt auf das echte Boot übertragen werden!
+
+### 📥 Inputs (Sensorik vom Boot ➔ KI)
+| Topic | ROS Message Typ | Beschreibung |
+| :--- | :--- | :--- |
+| `/GPS` | `geometry_msgs/Point` | Globale Position des Bootes (die Bridge errechnet daraus die Vorwärtsgeschwindigkeit und Distanz) |
+| `/Kompass` | `std_msgs/Float64` | Globale Ausrichtung (Heading) des Bootes (daraus errechnet die Bridge die Drehgeschwindigkeit) |
+| `/Neigung` | `std_msgs/Float64` | Krängung (Kippen des Bootes) |
+| `/Windgeschwindigkeit` | `std_msgs/Float64` | Gemessener scheinbarer Wind |
+| `/Windrichtung` | `std_msgs/Float64` | Relativer Winkel des scheinbaren Windes |
+| `/Ruderstellung_Ist` | `std_msgs/Float64` | Aktueller Winkel des Ruders |
+| `/Segelstellung_Ist` | `std_msgs/Float64` | Aktueller Winkel des Segels |
+
+### 📤 Outputs (KI ➔ Steuerung des Bootes)
+| Topic | ROS Message Typ | Beschreibung |
+| :--- | :--- | :--- |
+| `/Ruderstellung_Soll` | `std_msgs/Float64` | Gewünschter Zielwinkel für das Ruder (ausgegeben als relative Änderung / Delta) |
+| `/Segelstellung_Soll` | `std_msgs/Float64` | Gewünschter Zielwinkel für das Segel (ausgegeben als relative Änderung / Delta) |
+
+---
+
 ## 📂 Projektstruktur
 
 | Datei / Ordner | Kurzbeschreibung |
 | :--- | :--- |
 | `config.py` | Zentrale Definitionsdatei für alle Physik- und Trainingsparameter. |
 | `dummy_node.py` | Berechnung der Bootsphysik und Verarbeitung von Steuerbefehlen. |
-| `sailboat_gym_env.py` | Definition des Beobachtungsraums und der Belohnungsfunktion. |
+| `reward_calculator.py` | Ausgelagerte Belohnungsfunktion (Reward-Logik) für das Neuronale Netz. |
+| `sailboat_gym_env.py` | Definition des Beobachtungsraums (Bridge) und Schnittstelle zur KI. |
 | `train.py` | Initialisierung des Modells und Ausführung der Trainingsschleife. |
 | `visualizer_node.py` | Grafische Echtzeit-Darstellung von Boot, Wind und Ziel. |
 | `requirements.txt` | Liste aller erforderlichen Python-Bibliotheken und Versionen. |
