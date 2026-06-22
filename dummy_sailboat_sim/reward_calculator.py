@@ -1,23 +1,30 @@
 from dummy_sailboat_sim.config import Config
-
+import math
 class RewardCalculator:
     def __init__(self):
         pass
 
-    def calculate(self, current_dist: float, prev_dist: float, action: list) -> tuple[float, bool]:
+    def calculate(self, state_dict: dict, action: list) -> tuple[float, bool]:
         """
         Berechnet die Belohnung (Reward) für den aktuellen Zustand.
         
         Args:
-            current_dist (float): Aktuelle Distanz zum Ziel.
-            prev_dist (float): Vorherige Distanz zum Ziel.
+            state_dict (dict): Dictionary mit allen aktuellen Sensordaten.
             action (list): Die in diesem Schritt ausgeführte Aktion [delta_rudder, delta_sail].
             
         Returns:
             tuple[float, bool]: (reward, terminated)
         """
-        # Distanz-Reward: Belohnung dafür, dass wir dem Ziel näher gekommen sind
-        reward = prev_dist - current_dist
+        current_dist = state_dict['current_dist']
+        v_linear = state_dict['v_linear']
+        angle_to_target = state_dict['angle_to_target']
+        
+        # 1. VMG (Velocity Made Good) berechnen
+        # Projizierte Geschwindigkeit in Richtung des Ziels
+        vmg = v_linear * math.cos(angle_to_target)
+        
+        # Belohnung primär über VMG
+        reward = vmg * Config.REWARD_VMG_MULTIPLIER
 
         # Action Jitter Penalty: Bestrafung für zu starkes Lenken / Segelziehen (Smoothness)
         reward += Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))

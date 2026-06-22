@@ -59,6 +59,7 @@ class Config:
     # 💰 5. Belohnungssystem
     # ==========================================
 
+    REWARD_VMG_MULTIPLIER = 10.0    # [/]       Belohnung - VMG (Velocity Made Good) Multiplikator
     REWARD_SUCCESS = 20.0           # [/]       Belohnung - Ziel erreicht
     REWARD_FAIL = -10.0             # [/]       Strafe    - Rausgefahren
     REWARD_TIME_PENALTY = -0.01     # [/]       Strafe    - Zeitdruck    

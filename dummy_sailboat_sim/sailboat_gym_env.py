@@ -49,6 +49,8 @@ class SailboatEnv(gym.Env):
         self.current_sail_ist = 0.0
         self.current_wind_speed = 0.0
         self.current_wind_dir = 0.0
+        self.current_v_linear = 0.0
+        self.current_rel_angle = 0.0
         
         # Für Geschwindigkeitsberechnung aus GPS
         self.prev_gps = None
@@ -122,6 +124,9 @@ class SailboatEnv(gym.Env):
             d_theta = (d_theta + math.pi) % (2 * math.pi) - math.pi
             v_angular = d_theta / dt
 
+        self.current_v_linear = v_linear
+        self.current_rel_angle = rel_angle_to_target
+
         self.prev_gps = Point(x=self.current_gps.x, y=self.current_gps.y, z=0.0)
         self.prev_compass = self.current_compass
         self.prev_time = current_time
@@ -173,7 +178,13 @@ class SailboatEnv(gym.Env):
         # ==========================================
         # REWARD-BERECHNUNG (ausgelagert)
         # ==========================================
-        reward, terminated = self.reward_calculator.calculate(current_dist, self.prev_dist, action)
+        state_dict = {
+            'current_dist': current_dist,
+            'v_linear': self.current_v_linear,
+            'angle_to_target': self.current_rel_angle,
+            'heel_angle': self.current_heel
+        }
+        reward, terminated = self.reward_calculator.calculate(state_dict, action)
         self.prev_dist = current_dist
 
         self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
