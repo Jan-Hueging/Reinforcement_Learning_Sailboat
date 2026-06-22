@@ -20,7 +20,7 @@ class Config:
 
     TARGET_REWARD_RADIUS = 5.0      # [Meter]   Größe des Ziels
     OUT_OF_BOUNDS_RADIUS = 150.0    # [Meter]   Out of Bounds
-    TARGET_SPAWN_X = (20.0, 75.0)  # [Meter]   Zielbereich X
+    TARGET_SPAWN_X = (20.0, 75.0)   # [Meter]   Zielbereich X
     TARGET_SPAWN_Y = (-50.0, 50.0)  # [Meter]   Zielbereich Y
 
     WIND_SPEED_DEFAULT = 5.0        # [m/s]     konst. Windgeschwindigkeit
@@ -72,3 +72,17 @@ class Config:
     # Name des zu trainierenden Modells
     MODEL_NAME = "sailboat_model_v2"
 
+
+    # ===============================================
+    # 📡 7. ROS TOPICS
+    # ==========================================
+
+    TOPIC_GPS = '/GPS'
+    TOPIC_COMPASS = '/Kompass'
+    TOPIC_HEEL = '/Neigung'
+    TOPIC_RUDDER_IST = '/Ruderstellung_Ist'
+    TOPIC_RUDDER_SOLL = '/Ruderstellung_Soll'
+    TOPIC_SAIL_IST = '/Segelstellung_Ist'
+    TOPIC_SAIL_SOLL = '/Segelstellung_Soll'
+    TOPIC_WIND_SPEED = '/Windgeschwindigkeit'
+    TOPIC_WIND_DIR = '/Windrichtung'

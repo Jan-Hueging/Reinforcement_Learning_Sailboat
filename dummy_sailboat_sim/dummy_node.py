@@ -4,8 +4,7 @@ import math
 
 # Nachrichten-Typen importieren
 from std_msgs.msg import Float64
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Vector3 
+from geometry_msgs.msg import Point, Vector3 
 from dummy_sailboat_sim.config import Config
 from std_srvs.srv import Empty
 
@@ -39,8 +38,10 @@ class DummySailboat(Node):
         # 2. SCHNITTSTELLEN: INPUTS (Subscriber)
         # ==========================================
 
-        self.sub_rudder = self.create_subscription(Float64, '/cmd_rudder', self.rudder_cb, 10)
-        self.sub_sail = self.create_subscription(Float64, '/cmd_sail', self.sail_cb, 10)
+        self.sub_rudder = self.create_subscription(Float64, Config.TOPIC_RUDDER_SOLL, self.rudder_cb, 10)
+        self.sub_sail = self.create_subscription(Float64, Config.TOPIC_SAIL_SOLL, self.sail_cb, 10)
+        
+        # Wind kommt weiterhin vom Debug-Visualizer
         self.sub_true_wind = self.create_subscription(Vector3, '/debug/true_wind', self.true_wind_cb, 10)
 
 
@@ -48,9 +49,13 @@ class DummySailboat(Node):
         # 3. SCHNITTSTELLEN: OUTPUTS (Publisher)
         # ==========================================
 
-        self.pub_odom = self.create_publisher(Odometry, '/sensors/odom', 10)
-        self.pub_wind = self.create_publisher(Vector3, '/sensors/apparent_wind', 10)
-        self.pub_heel = self.create_publisher(Float64, '/sensors/heel_angle', 10)
+        self.pub_gps = self.create_publisher(Point, Config.TOPIC_GPS, 10)
+        self.pub_compass = self.create_publisher(Float64, Config.TOPIC_COMPASS, 10)
+        self.pub_heel = self.create_publisher(Float64, Config.TOPIC_HEEL, 10)
+        self.pub_rudder_ist = self.create_publisher(Float64, Config.TOPIC_RUDDER_IST, 10)
+        self.pub_sail_ist = self.create_publisher(Float64, Config.TOPIC_SAIL_IST, 10)
+        self.pub_wind_speed = self.create_publisher(Float64, Config.TOPIC_WIND_SPEED, 10)
+        self.pub_wind_dir = self.create_publisher(Float64, Config.TOPIC_WIND_DIR, 10)
         self.timer = self.create_timer(self.dt, self.update_physics)
 
         self.get_logger().info('⚓ Dummy-Boot mit dynamischem Wind gestartet!')
@@ -114,22 +119,26 @@ class DummySailboat(Node):
         # 4. DATEN SENDEN
         # ==========================================
 
-        # Scheinbarer Wind
-        self.pub_wind.publish(Vector3(x=float(aw_speed), y=float(aw_angle_relative), z=0.0))
-        
-        # Krängung
+        # GPS Position
+        gps_msg = Point()
+        gps_msg.x = float(self.x)
+        gps_msg.y = float(self.y)
+        gps_msg.z = 0.0
+        self.pub_gps.publish(gps_msg)
+
+        # Kompass (Ausrichtung)
+        self.pub_compass.publish(Float64(data=float(self.theta)))
+
+        # Neigung (Krängung)
         self.pub_heel.publish(Float64(data=float(self.heel_angle)))
 
-        # Odometrie
-        odom = Odometry()
-        odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = 'odom'
-        odom.pose.pose.position.x, odom.pose.pose.position.y = self.x, self.y
-        odom.pose.pose.orientation.z = math.sin(self.theta / 2.0)
-        odom.pose.pose.orientation.w = math.cos(self.theta / 2.0)
-        odom.twist.twist.linear.x = float(self.v)
-        odom.twist.twist.angular.z = float(turn_rate)
-        self.pub_odom.publish(odom)
+        # Scheinbarer Wind (Gemessen)
+        self.pub_wind_speed.publish(Float64(data=float(aw_speed)))
+        self.pub_wind_dir.publish(Float64(data=float(aw_angle_relative)))
+
+        # Aktuelle Stellung von Ruder und Segel
+        self.pub_rudder_ist.publish(Float64(data=float(self.cmd_rudder)))
+        self.pub_sail_ist.publish(Float64(data=float(self.cmd_sail)))
 
     def reset_callback(self, request, response):
         self.get_logger().info('🔄 Teleportiere Boot zurück zum Start...')
