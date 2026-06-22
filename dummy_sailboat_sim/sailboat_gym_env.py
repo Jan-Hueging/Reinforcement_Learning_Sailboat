@@ -7,6 +7,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 import math
 from dummy_sailboat_sim.config import Config
+from dummy_sailboat_sim.reward_calculator import RewardCalculator
 from std_srvs.srv import Empty
 
 class SailboatEnv(gym.Env):
@@ -52,6 +53,8 @@ class SailboatEnv(gym.Env):
         # Gedächtnis für Delta-Steuerung
         self.current_rudder = Config.INITIAL_RUDDER_ANGLE
         self.current_sail = Config.INITIAL_SAIL_ANGLE
+        
+        self.reward_calculator = RewardCalculator()
 
     def _odom_cb(self, msg):
         self.current_odom = msg
@@ -103,25 +106,13 @@ class SailboatEnv(gym.Env):
         current_dist = np.linalg.norm(self.target_pos - pos)
         
         # ==========================================
-        # REWARD-BERECHNUNG
+        # REWARD-BERECHNUNG (ausgelagert)
         # ==========================================
-        reward = self.prev_dist - current_dist
+        reward, terminated = self.reward_calculator.calculate(current_dist, self.prev_dist, action)
         self.prev_dist = current_dist
 
-        reward += Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))
-        
-        reward += Config.REWARD_TIME_PENALTY
-
         self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
-        
-        # Abbruchbedingungen
-        terminated = False
-        if current_dist < Config.TARGET_REWARD_RADIUS: 
-            reward += Config.REWARD_SUCCESS 
-            terminated = True
-        elif current_dist > Config.OUT_OF_BOUNDS_RADIUS: 
-            reward += Config.REWARD_FAIL
-            terminated = True
+
 
         self.current_step += 1
         truncated = False
