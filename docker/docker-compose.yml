@@ -33,8 +33,8 @@ x-common: &common
     - ../models:/ros2_ws/models:rw
     # Live-Code Sync (Entwickler-Modus)
     - ..:/ros2_ws/src/dummy_sailboat_sim:rw
-  # Host-Netzwerk: ROS2-DDS-Discovery zwischen Containern
-  network_mode: host
+    # Zwingt Docker, unser neues Skript zu laden, OHNE dass man "setup" machen muss
+    - ./entrypoint.sh:/entrypoint.sh:ro
   # Container nach Absturz automatisch neu starten
   restart: unless-stopped
 

@@ -31,15 +31,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── ROS2-Workspace erstellen ──────────────────────────────────
 RUN mkdir -p /ros2_ws/src
 
-# ── Lokalen Code kopieren ─────────────────────────────────────
-WORKDIR /ros2_ws/src/dummy_sailboat_sim
-COPY . /ros2_ws/src/dummy_sailboat_sim/
-
 # ── Python-Abhängigkeiten installieren ────────────────────────
 WORKDIR /ros2_ws/src/dummy_sailboat_sim
+COPY requirements.txt /ros2_ws/src/dummy_sailboat_sim/
 RUN pip install --no-cache-dir --break-system-packages \
     --ignore-installed numpy \
     -r requirements.txt
+
+# ── Lokalen Code kopieren ─────────────────────────────────────
+COPY . /ros2_ws/src/dummy_sailboat_sim/
 
 
 #---test--------------------------------------------------------
@@ -51,6 +51,7 @@ WORKDIR /ros2_ws
 RUN bash -c "\
     source /opt/ros/jazzy/setup.bash && \
     colcon build \
+        --symlink-install \
         --packages-select dummy_sailboat_sim \
         --cmake-args -DCMAKE_BUILD_TYPE=Release"
         

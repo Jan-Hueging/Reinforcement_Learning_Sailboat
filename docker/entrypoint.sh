@@ -7,6 +7,10 @@ set -e
 # ROS2 Jazzy sourcen
 source /opt/ros/jazzy/setup.bash
 
+# Live-Code Sync Fix: Bei jedem Start den (gemounteten) Code frisch einbauen
+cd /ros2_ws
+colcon build --packages-select dummy_sailboat_sim --cmake-args -DCMAKE_BUILD_TYPE=Release > /dev/null
+
 # Kompilierten Workspace sourcen (falls vorhanden)
 if [ -f /ros2_ws/install/setup.bash ]; then
     source /ros2_ws/install/setup.bash

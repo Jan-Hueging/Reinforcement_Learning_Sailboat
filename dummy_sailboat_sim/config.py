@@ -52,7 +52,7 @@ class Config:
     # ==========================================
 
     STEP_TIME_SEC = 0.025           # [Sekunde] Schrittgeschwindigkeit   
-    MAX_EPISODE_STEPS = 1024        # [Steps]   Abbruchspunkt 
+    MAX_EPISODE_STEPS = 3072        # [Steps]   Abbruchspunkt 
     
 
     # ===============================================

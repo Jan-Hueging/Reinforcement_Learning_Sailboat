@@ -5,8 +5,8 @@ import numpy as np
 import math
 
 from std_msgs.msg import Float64
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import Point, Vector3
+from dummy_sailboat_sim.config import Config
 
 class VisualizerNode(Node):
     def __init__(self):
@@ -24,13 +24,15 @@ class VisualizerNode(Node):
         self.debug_true_wind_angle = math.pi
 
         # Publisher für die Steuerung
-        self.pub_rudder = self.create_publisher(Float64, '/cmd_rudder', 10)
-        self.pub_sail = self.create_publisher(Float64, '/cmd_sail', 10)
+        self.pub_rudder = self.create_publisher(Float64, Config.TOPIC_RUDDER_SOLL, 10)
+        self.pub_sail = self.create_publisher(Float64, Config.TOPIC_SAIL_SOLL, 10)
         self.pub_weather = self.create_publisher(Vector3, '/debug/true_wind', 10)
 
         # Subscriber für die Sensoren
-        self.create_subscription(Odometry, '/sensors/odom', self.odom_cb, 10)
-        self.create_subscription(Vector3, '/sensors/apparent_wind', self.wind_cb, 10)
+        self.create_subscription(Point, Config.TOPIC_GPS, self.gps_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_COMPASS, self.compass_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_WIND_SPEED, self.wind_speed_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_WIND_DIR, self.wind_dir_cb, 10)
 
         # Schieberegler für Boot-Steuerung
         cv2.createTrackbar('Ruder (-1 bis 1)', self.window_name, 100, 200, self.update_controls)
@@ -49,20 +51,21 @@ class VisualizerNode(Node):
 
         # Subscriber Ruder, Segel & Ziel
         self.create_subscription(Vector3, '/navigation/target', self.target_cb, 10)
-        self.create_subscription(Float64, '/cmd_rudder', self.cmd_rudder_cb, 10)
-        self.create_subscription(Float64, '/cmd_sail', self.cmd_sail_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_RUDDER_IST, self.cmd_rudder_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_SAIL_IST, self.cmd_sail_cb, 10)
 
-    def odom_cb(self, msg):
-        self.x = msg.pose.pose.position.x
-        self.y = msg.pose.pose.position.y
-        self.speed = msg.twist.twist.linear.x
-        z = msg.pose.pose.orientation.z
-        w = msg.pose.pose.orientation.w
-        self.theta = math.atan2(2.0 * w * z, 1.0 - 2.0 * z * z)
+    def gps_cb(self, msg):
+        self.x = msg.x
+        self.y = msg.y
 
-    def wind_cb(self, msg):
-        self.wind_speed = msg.x
-        self.wind_angle = msg.y 
+    def compass_cb(self, msg):
+        self.theta = msg.data
+
+    def wind_speed_cb(self, msg):
+        self.wind_speed = msg.data
+
+    def wind_dir_cb(self, msg):
+        self.wind_angle = msg.data
 
     def update_controls(self, _):
         # Regler auslesen
@@ -95,65 +98,88 @@ class VisualizerNode(Node):
         self.pub_weather.publish(Vector3(x=w_speed, y=w_angle_rad, z=0.0))
 
     def render_loop(self):
-        img = np.zeros((600, 600, 3), dtype=np.uint8)
-        cx, cy = 300, 300 
+        WIDTH, HEIGHT = 1000, 1000
+        # Wasser-Hintergrund (Tiefblau)
+        img = np.full((HEIGHT, WIDTH, 3), (60, 30, 10), dtype=np.uint8)
+        cx, cy = int(WIDTH * 0.15), HEIGHT // 2
+        
+        # Gitternetz (Ozean-Grid)
+        for i in range(0, WIDTH, 50):
+            cv2.line(img, (i, 0), (i, HEIGHT), (80, 45, 20), 1)
+            cv2.line(img, (0, i), (WIDTH, i), (80, 45, 20), 1)
         
         # Umrechnung Boot-Position
-        px = int(cx + self.x * self.scale) % 600
-        py = int(cy - self.y * self.scale) % 600
+        self.scale = 20.0
+        px = int(cx + self.x * self.scale) % WIDTH
+        py = int(cy - self.y * self.scale) % HEIGHT
 
         # Dynamischer Zielpunkt
-        t_px = int(cx + self.target_x * self.scale) % 600
-        t_py = int(cy - self.target_y * self.scale) % 600
+        t_px = int(cx + self.target_x * self.scale) % WIDTH
+        t_py = int(cy - self.target_y * self.scale) % HEIGHT
         
-        # Ziel-Kreis und Text zeichnen
-        cv2.circle(img, (t_px, t_py), 8, (0, 255, 255), -1) 
-        cv2.putText(img, f"ZIEL ({self.target_x:.1f}, {self.target_y:.1f})", 
-                    (t_px + 12, t_py - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        # Ziel-Marker (Bojen-Look)
+        cv2.circle(img, (t_px, t_py), 12, (0, 165, 255), -1) # Orange
+        cv2.circle(img, (t_px, t_py), 16, (0, 255, 255), 2)  # Gelber Ring
+        cv2.putText(img, f"TARGET", (t_px - 25, t_py - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, f"({self.target_x:.1f}, {self.target_y:.1f})", (t_px - 35, t_py + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1, cv2.LINE_AA)
 
-        # Bootskörper zeichnen
-        cv2.circle(img, (px, py), 10, (0, 255, 0), -1) 
-        
-        # Fahrtrichtung zeichnen
-        nose_x = int(px + math.cos(self.theta) * 25)
-        nose_y = int(py - math.sin(self.theta) * 25)
-        cv2.line(img, (px, py), (nose_x, nose_y), (0, 255, 0), 2)
-        
-        # Wind-Pfeil zeichnen
-        global_wind_angle = self.theta + self.wind_angle
-        wind_x = int(px + math.cos(global_wind_angle) * (self.wind_speed * 5))
-        wind_y = int(py - math.sin(global_wind_angle) * (self.wind_speed * 5))
-        cv2.line(img, (px, py), (wind_x, wind_y), (255, 0, 0), 2)
+        # Boot Rumpf (Polygon)
+        hull_length = 30
+        hull_width = 12
+        boat_pts = np.array([
+            [px + math.cos(self.theta) * hull_length, py - math.sin(self.theta) * hull_length], # Nase
+            [px + math.cos(self.theta - 2.5) * hull_width, py - math.sin(self.theta - 2.5) * hull_width], # Heck rechts
+            [px - math.cos(self.theta) * (hull_length*0.2), py + math.sin(self.theta) * (hull_length*0.2)], # Heck mitte
+            [px + math.cos(self.theta + 2.5) * hull_width, py - math.sin(self.theta + 2.5) * hull_width], # Heck links
+        ], np.int32)
+        cv2.fillConvexPoly(img, boat_pts, (200, 200, 200))
+        cv2.polylines(img, [boat_pts], True, (255, 255, 255), 2)
 
-        # Ruder zeichnen
-        stern_x = int(px - math.cos(self.theta) * 10)
-        stern_y = int(py + math.sin(self.theta) * 10)
+        # Scheinbarer Wind-Pfeil (entfernt nach User-Wunsch)
+        # (Wird nicht mehr gezeichnet, da er am Boot stört)
+
+        # Ruder
+        stern_x = int(px - math.cos(self.theta) * (hull_length*0.2))
+        stern_y = int(py + math.sin(self.theta) * (hull_length*0.2))
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 12)
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 12)
+        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 15)
+        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 15)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (0, 0, 255), 3)
 
-        # Segel zeichnen
-        sail_angle = self.theta - self.current_sail
-        sail_end_x = int(px - math.cos(sail_angle) * 10)
-        sail_end_y = int(py + math.sin(sail_angle) * 10)
-        cv2.line(img, (px, py), (sail_end_x, sail_end_y), (255, 255, 255), 2)
+        # Segel (Weiß) - optisch um 90 Grad gedreht für intuitive Anzeige
+        sail_angle = self.theta - self.current_sail + (math.pi / 2)
+        sail_end_x = int(px - math.cos(sail_angle) * 25)
+        sail_end_y = int(py + math.sin(sail_angle) * 25)
+        cv2.line(img, (px, py), (sail_end_x, sail_end_y), (255, 255, 255), 4)
 
-        # Texte für Telemetrie darstellen
-        cv2.putText(img, f"Speed: {self.speed:.2f} m/s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(img, f"Wind: {self.wind_speed:.1f} m/s", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 200, 0), 2)
-        cv2.putText(img, f"Ruder: {math.degrees(self.current_rudder):.0f} Deg", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        # HUD / Telemetrie (halbtransparenter Hintergrund)
+        overlay = img.copy()
+        cv2.rectangle(overlay, (10, 10), (250, 140), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, img, 0.4, 0, img)
+        
+        cv2.putText(img, "TELEMETRY", (20, 35), cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, "-" * 30, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.putText(img, f"Speed: {self.speed:.2f} m/s", (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, f"A-Wind: {self.wind_speed:.1f} m/s", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Rudder: {math.degrees(self.current_rudder):.0f} deg", (20, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 100, 255), 1, cv2.LINE_AA)
 
-        # Globalen Windindikator zeichnen
-        compass_cx, compass_cy = 540, 60
-        cv2.circle(img, (compass_cx, compass_cy), 30, (50, 50, 50), 1)
-        tw_end_x = int(compass_cx - math.cos(self.debug_true_wind_angle) * 25)
-        tw_end_y = int(compass_cy + math.sin(self.debug_true_wind_angle) * 25)
-        cv2.arrowedLine(img, (compass_cx, compass_cy), (tw_end_x, tw_end_y), (255, 255, 0), 2, tipLength=0.3)
-        cv2.putText(img, "TRUE WIND", (500, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+        # Globaler True Windindikator oben rechts
+        compass_cx, compass_cy = WIDTH - 80, 80
+        cv2.circle(img, (compass_cx, compass_cy), 40, (30, 30, 30), -1)
+        cv2.circle(img, (compass_cx, compass_cy), 40, (100, 100, 100), 2)
+        cv2.putText(img, "N", (compass_cx - 5, compass_cy - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1, cv2.LINE_AA)
+        
+        tw_end_x = int(compass_cx - math.cos(self.debug_true_wind_angle) * 30)
+        tw_end_y = int(compass_cy + math.sin(self.debug_true_wind_angle) * 30)
+        cv2.arrowedLine(img, (compass_cx, compass_cy), (tw_end_x, tw_end_y), (255, 150, 0), 3, tipLength=0.3)
+        cv2.putText(img, "T-WIND", (compass_cx - 25, compass_cy + 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 150, 0), 1, cv2.LINE_AA)
 
         cv2.imshow(self.window_name, img)
-        cv2.waitKey(1)
+        
+        # Fenster schließen ermöglichen (ESC Taste beendet Node)
+        key = cv2.waitKey(1)
+        if key == 27:
+            rclpy.shutdown()
 
     def target_cb(self, msg):
         self.target_x = msg.x
