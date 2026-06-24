@@ -10,8 +10,14 @@ Dieses Repository umfasst eine ROS2-basierte Simulationsumgebung für das Traini
 
 ## 🛠 Voraussetzungen
 
-Die folgenden Systemkomponenten werden für den Betrieb zwingend vorausgesetzt:
+Je nachdem, für welchen Weg du dich entscheidest, brauchst du unterschiedliche Programme:
 
+**Für das empfohlene Docker-Setup:**
+* **Docker** & **Docker Compose**
+* **Git** (um das Repository herunterzuladen)
+* Ein **Linux-System** (für die grafische X11-Weiterleitung)
+
+**Für die manuelle, lokale Installation (ohne Docker):**
 * **ROS2 Jazzy**: Kommunikations-Middleware für die Nodes.
 * **Python 3.12+**: Primäre Programmiersprache der Umgebung.
 * **Stable Baselines3**: Framework zur Ausführung des PPO-Algorithmus.
@@ -21,7 +27,36 @@ Die folgenden Systemkomponenten werden für den Betrieb zwingend vorausgesetzt:
 
 ---
 
-## 🚀 Installation & Build
+## 🐳 Docker Setup (Empfohlen: Einfachster Weg)
+
+Wenn du ohne Vorwissen direkt starten möchtest, nutze unsere vorbereitete Docker-Umgebung. Docker lädt alle nötigen Programme (ROS2, Python, etc.) automatisch herunter und richtet sie ein.
+
+### 1. Vorbereitung & Installation
+Öffne ein Terminal auf deinem PC und lade dir zuerst dieses Repository (welches die Docker-Konfiguration enthält) herunter. Anschließend navigierst du in den `docker` Ordner und startest das Setup:
+
+```bash
+git clone https://github.com/Jan-Hueging/Reinforcement_Learning_Sailboat.git
+cd Reinforcement_Learning_Sailboat/docker
+sudo make setup
+```
+
+### 2. Simulation & Training starten
+Sobald das Setup abgeschlossen ist, kannst du die komplette Umgebung (Simulation, Radar-Visualisierung und KI-Training) mit einem einzigen Befehl starten:
+
+```bash
+sudo make run-all
+```
+
+*(Zum Beenden einfach `Strg+C` drücken).*
+
+**Möchtest du die Komponenten einzeln starten?** Öffne dafür jeweils ein neues Terminal im `docker` Ordner:
+* **Physik-Simulation:** `sudo make run-physics`
+* **Visualisierung:** `sudo make run-visualizer`
+* **KI-Training:** `sudo make run-training`
+
+---
+
+## 🚀 Lokale Installation (Alternativ ohne Docker)
 
 Übersicht der notwendigen Schritte zur Erstellung des Workspaces und zur Installation der definierten Abhängigkeiten:
 
@@ -47,7 +82,7 @@ source install/setup.bash
 
 ---
 
-## 🧠 Training starten
+## 🧠 Training starten (Lokale Installation)
 
 Für den Lernprozess ist der parallele Betrieb von Simulation und Trainingsskript erforderlich.
 
@@ -68,37 +103,13 @@ Für den Lernprozess ist der parallele Betrieb von Simulation und Trainingsskrip
 
 ---
 
-## 📡 ROS2 Topics (Bridge Architektur)
-
-Die Simulation und die KI sind durch eine saubere **Bridge-Architektur** (`sailboat_gym_env.py`) getrennt. Die Kommunikation erfolgt ausschließlich über standardisierte ROS2-Topics. So kann das trainierte Modell später ohne Code-Änderungen vom Dummy direkt auf das echte Boot übertragen werden!
-
-### 📥 Inputs (Sensorik vom Boot ➔ KI)
-| Topic | ROS Message Typ | Beschreibung |
-| :--- | :--- | :--- |
-| `/GPS` | `geometry_msgs/Point` | Globale Position des Bootes (die Bridge errechnet daraus die Vorwärtsgeschwindigkeit und Distanz) |
-| `/Kompass` | `std_msgs/Float64` | Globale Ausrichtung (Heading) des Bootes (daraus errechnet die Bridge die Drehgeschwindigkeit) |
-| `/Neigung` | `std_msgs/Float64` | Krängung (Kippen des Bootes) |
-| `/Windgeschwindigkeit` | `std_msgs/Float64` | Gemessener scheinbarer Wind |
-| `/Windrichtung` | `std_msgs/Float64` | Relativer Winkel des scheinbaren Windes |
-| `/Ruderstellung_Ist` | `std_msgs/Float64` | Aktueller Winkel des Ruders |
-| `/Segelstellung_Ist` | `std_msgs/Float64` | Aktueller Winkel des Segels |
-
-### 📤 Outputs (KI ➔ Steuerung des Bootes)
-| Topic | ROS Message Typ | Beschreibung |
-| :--- | :--- | :--- |
-| `/Ruderstellung_Soll` | `std_msgs/Float64` | Gewünschter Zielwinkel für das Ruder (ausgegeben als relative Änderung / Delta) |
-| `/Segelstellung_Soll` | `std_msgs/Float64` | Gewünschter Zielwinkel für das Segel (ausgegeben als relative Änderung / Delta) |
-
----
-
 ## 📂 Projektstruktur
 
 | Datei / Ordner | Kurzbeschreibung |
 | :--- | :--- |
 | `config.py` | Zentrale Definitionsdatei für alle Physik- und Trainingsparameter. |
 | `dummy_node.py` | Berechnung der Bootsphysik und Verarbeitung von Steuerbefehlen. |
-| `reward_calculator.py` | Ausgelagerte Belohnungsfunktion (Reward-Logik) für das Neuronale Netz. |
-| `sailboat_gym_env.py` | Definition des Beobachtungsraums (Bridge) und Schnittstelle zur KI. |
+| `sailboat_gym_env.py` | Definition des Beobachtungsraums und der Belohnungsfunktion. |
 | `train.py` | Initialisierung des Modells und Ausführung der Trainingsschleife. |
 | `visualizer_node.py` | Grafische Echtzeit-Darstellung von Boot, Wind und Ziel. |
 | `requirements.txt` | Liste aller erforderlichen Python-Bibliotheken und Versionen. |

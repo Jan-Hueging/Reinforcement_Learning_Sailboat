@@ -1,0 +1,73 @@
+# ============================================================
+# Docker Compose — Sailboat RL Simulation
+#
+# Dienste:
+#   physics     → Physik-Simulation (ROS2 Node)
+#   visualizer  → Pygame-Visualisierung (optional)
+#   training    → PPO-Training (Stable Baselines3)
+#   sim         → Alle drei Komponenten in einem Container (tmux)
+#
+# Starten:
+#   Alle getrennt:  docker compose up physics visualizer training
+#   All-in-One:     docker compose up sim
+#   Einzeln:        docker compose run --rm physics
+# ============================================================
+
+x-common: &common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  image: sailboat_sim:latest
+  environment:
+    # X11-Display für Pygame-Visualisierung
+    - DISPLAY=${DISPLAY:-:0}
+    - QT_X11_NO_MITSHM=1
+    - LIBGL_ALWAYS_INDIRECT=0
+    # ROS2 Domain-ID (isoliert Netzwerk-Traffic)
+    - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
+    - PYTHONUNBUFFERED=1
+  volumes:
+    # X11-Socket (Grafik auf Host anzeigen)
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # Trainierte Modelle auf Host speichern
+    - ../models:/ros2_ws/models:rw
+    # Live-Code Sync (Entwickler-Modus)
+    - ..:/ros2_ws/src/dummy_sailboat_sim:rw
+  # Host-Netzwerk: ROS2-DDS-Discovery zwischen Containern
+  network_mode: host
+  # Container nach Absturz automatisch neu starten
+  restart: unless-stopped
+
+services:
+
+  # ── Physik-Simulation ───────────────────────────────────────
+  physics:
+    <<: *common
+    container_name: sailboat_physics
+    command: ros2 run dummy_sailboat_sim dummy_node
+
+  # ── Radar-Visualisierung (optional) ────────────────────────
+  visualizer:
+    <<: *common
+    container_name: sailboat_visualizer
+    command: >
+      ros2 run dummy_sailboat_sim visualizer
+      --ros-args --log-level WARN
+
+  # ── KI-Training ─────────────────────────────────────────────
+  training:
+    <<: *common
+    container_name: sailboat_training
+    command: >
+      python3 src/dummy_sailboat_sim/dummy_sailboat_sim/train.py
+    # Kein Neustart nach normalem Beenden
+    restart: "no"
+
+  # ── All-in-One (alle Nodes in einem tmux-Container) ─────────
+  sim:
+    <<: *common
+    container_name: sailboat_all
+    command: /scripts/launch_all.sh
+    stdin_open: true
+    tty: true
+    restart: "no"
