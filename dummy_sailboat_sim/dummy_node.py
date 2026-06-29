@@ -77,8 +77,9 @@ class DummySailboat(Node):
     def update_physics(self):
 
         # 1. Kinematik
-        # Drehung basierend auf Ruder und aktueller Fahrt
-        turn_rate = -self.cmd_rudder * self.v * Config.DUMMY_RUDDER_EFFECT
+        # Drehung basierend auf Ruder (jetzt in Grad) und aktueller Fahrt
+        norm_rudder = self.cmd_rudder / 45.0
+        turn_rate = -norm_rudder * self.v * Config.DUMMY_RUDDER_EFFECT
         self.theta += turn_rate * self.dt
         
         # Position (Vektorzerlegung)
@@ -101,8 +102,15 @@ class DummySailboat(Node):
         aw_angle_relative = (aw_angle_relative + math.pi) % (2 * math.pi) - math.pi
 
         # 3. Antrieb & Effizienz
+        # Die empfangene cmd_sail ist die Schotlänge (0 bis 70 Grad).
+        # Der echte Baumwinkel schwingt je nach Wind auf die Leeseite.
+        # aw_angle_relative ist die Richtung, in die der Wind weht.
+        # Das Segel wird in genau diese Richtung gedrückt.
+        sheet_rad = math.radians(self.cmd_sail)
+        actual_sail_rad = math.copysign(sheet_rad, aw_angle_relative)
+        
         # Cosinus von 0 bedeutet 100% Effizienz
-        efficiency = math.cos(self.cmd_sail - aw_angle_relative) 
+        efficiency = math.cos(actual_sail_rad - aw_angle_relative) 
         
         # Zielgeschwindigkeit (30% der Windgeschwindigkeit bei perfektem Segel)
         target_v = aw_speed * Config.DUMMY_SAIL_EFFICIENCY * max(0.0, efficiency) 
@@ -148,7 +156,7 @@ class DummySailboat(Node):
         self.v = Config.START_V
         self.heel_angle = 0.0
         self.cmd_rudder = 0.0
-        self.cmd_sail = Config.INITIAL_SAIL_ANGLE
+        self.cmd_sail = Config.INITIAL_SAIL_ANGLE_DEG
         return response
 
 def main(args=None):

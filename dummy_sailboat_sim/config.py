@@ -8,10 +8,10 @@ class Config:
     # ==========================================
 
     # ⚠️ nicht innerhalb eines Trainings verändern!
-    MAX_RUDDER_ANGLE = 0.785        # [rad]     Max. Ruderwinkel
-    MAX_SAIL_ANGLE = math.pi        # [rad]     Max. Segelwinkel
-    MAX_RUDDER_DELTA = 0.05         # [rad]     Max. Ruderdelta pro Step
-    MAX_SAIL_DELTA = 0.05           # [rad]     Max. Segeldelta pro Step
+    MAX_RUDDER_ANGLE_DEG = 45.0     # [Grad]    Max. Ruderwinkel
+    MAX_SAIL_ANGLE_DEG = 70.0       # [Grad]    Max. Segelwinkel
+    MAX_RUDDER_DELTA_NORM = 0.05    # [/]       Normiertes Ruderdelta pro Step (-1 bis 1)
+    MAX_SAIL_DELTA_NORM = 0.05      # [/]       Normiertes Segeldelta pro Step (-1 bis 1)
     
     DUMMY_RUDDER_EFFECT = 0.5       # [/]       Rudereffekt
     DUMMY_SAIL_EFFICIENCY = 0.3     # [0-1]     Max. Segeleffizienz
@@ -24,7 +24,7 @@ class Config:
     TARGET_SPAWN_Y = (-50.0, 50.0)  # [Meter]   Zielbereich Y
 
     WIND_SPEED_DEFAULT = 5.0        # [m/s]     konst. Windgeschwindigkeit
-    WIND_ANGLE_DEFAULT = math.pi    # [rad]     konst. Windrichtung
+    WIND_ANGLE_DEFAULT = 0.0        # [rad]     konst. Windrichtung (Rückenwind)
 
     # ===============================================
     # 🏁 2. Start-Zustände
@@ -34,8 +34,8 @@ class Config:
     START_Y = 0.0                   # [Meter]   Startposition Y
     START_THETA = 0.0               # [rad]     Startausrichtung
     START_V = 0.0                   # [m/s]     Startgeschwindigkeit
-    INITIAL_RUDDER_ANGLE = 0.0      # [rad]     Start-Ruderwinkel
-    INITIAL_SAIL_ANGLE = math.pi/2  # [rad]     Start-Segelwinkel
+    INITIAL_RUDDER_ANGLE_DEG = 0.0  # [Grad]    Start-Ruderwinkel
+    INITIAL_SAIL_ANGLE_DEG = 35.0   # [Grad]    Start-Segelwinkel
 
 
     # ===============================================
@@ -82,8 +82,8 @@ class Config:
     TOPIC_COMPASS = '/Kompass'
     TOPIC_HEEL = '/Neigung'
     TOPIC_RUDDER_IST = '/Ruderstellung_Ist'
-    TOPIC_RUDDER_SOLL = '/Ruderstellung_Soll'
+    TOPIC_RUDDER_SOLL = '/Ruderstellung_Soll_Autonom'
     TOPIC_SAIL_IST = '/Segelstellung_Ist'
-    TOPIC_SAIL_SOLL = '/Segelstellung_Soll'
+    TOPIC_SAIL_SOLL = '/Segelstellung_Soll_Autonom'
     TOPIC_WIND_SPEED = '/Windgeschwindigkeit'
     TOPIC_WIND_DIR = '/Windrichtung'

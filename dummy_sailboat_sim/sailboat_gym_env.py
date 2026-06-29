@@ -69,9 +69,9 @@ class SailboatEnv(gym.Env):
         
         self.max_steps = Config.MAX_EPISODE_STEPS 
 
-        # Gedächtnis für Delta-Steuerung
-        self.current_rudder = Config.INITIAL_RUDDER_ANGLE
-        self.current_sail = Config.INITIAL_SAIL_ANGLE
+        # Gedächtnis für Delta-Steuerung (Normiert auf -1 bis 1)
+        self.current_rudder_norm = 0.0
+        self.current_sail_norm = 0.0
         
         self.reward_calculator = RewardCalculator()
 
@@ -135,8 +135,9 @@ class SailboatEnv(gym.Env):
         obs_dist = np.clip(dist_to_target / 100.0, 0.0, 1.0) # 0 bis 1
         obs_angle = rel_angle_to_target / math.pi            # -1 bis 1
         obs_heel = np.clip(self.current_heel / (math.pi/4), -1.0, 1.0)
-        obs_rudder = np.clip(self.current_rudder_ist / Config.MAX_RUDDER_ANGLE, -1.0, 1.0)
-        obs_sail = np.clip(self.current_sail_ist / Config.MAX_SAIL_ANGLE, 0.0, 1.0) # 0 bis 1
+        # Ist-Werte in Grad auf -1 bis 1 normieren
+        obs_rudder = np.clip(self.current_rudder_ist / Config.MAX_RUDDER_ANGLE_DEG, -1.0, 1.0)
+        obs_sail = np.clip((self.current_sail_ist / (Config.MAX_SAIL_ANGLE_DEG / 2.0)) - 1.0, -1.0, 1.0)
         obs_wind_s = np.clip(self.current_wind_speed / 15.0, 0.0, 1.0)
         obs_wind_a = self.current_wind_dir / math.pi
         obs_v_lin = np.clip(v_linear / 5.0, 0.0, 1.0)
@@ -147,20 +148,24 @@ class SailboatEnv(gym.Env):
     def step(self, action):
 
         # action[0 & 1] sind die gewünschten Änderungen (-1 bis 1)
-        rudder_delta = action[0] * Config.MAX_RUDDER_DELTA
-        sail_delta = action[1] * Config.MAX_SAIL_DELTA
+        rudder_delta = action[0] * Config.MAX_RUDDER_DELTA_NORM
+        sail_delta = action[1] * Config.MAX_SAIL_DELTA_NORM
 
         # Delta auf IST addieren
-        self.current_rudder += rudder_delta
-        self.current_sail += sail_delta
+        self.current_rudder_norm += rudder_delta
+        self.current_sail_norm += sail_delta
 
         # Segel & Ruder begrenzen
-        self.current_rudder = np.clip(self.current_rudder, -Config.MAX_RUDDER_ANGLE, Config.MAX_RUDDER_ANGLE)
-        self.current_sail = np.clip(self.current_sail, 0.0, Config.MAX_SAIL_ANGLE)
+        self.current_rudder_norm = np.clip(self.current_rudder_norm, -1.0, 1.0)
+        self.current_sail_norm = np.clip(self.current_sail_norm, -1.0, 1.0)
+
+        # Umrechnen in Grad für die Topics
+        pub_rudder_deg = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_DEG)
+        pub_sail_deg = float(((self.current_sail_norm + 1.0) / 2.0) * Config.MAX_SAIL_ANGLE_DEG)
 
         # Senden (neuen) Werte
-        self.pub_rudder.publish(Float64(data=float(self.current_rudder)))
-        self.pub_sail.publish(Float64(data=float(self.current_sail)))
+        self.pub_rudder.publish(Float64(data=pub_rudder_deg))
+        self.pub_sail.publish(Float64(data=pub_sail_deg))
 
         # Warten auf Physik
         rclpy.spin_once(self.node, timeout_sec=Config.STEP_TIME_SEC)
@@ -209,11 +214,14 @@ class SailboatEnv(gym.Env):
         super().reset(seed=seed)
         self.current_step = 0 
         
-        self.current_rudder = Config.INITIAL_RUDDER_ANGLE
-        self.current_sail = Config.INITIAL_SAIL_ANGLE
+        self.current_rudder_norm = 0.0
+        self.current_sail_norm = 0.0
         
-        self.pub_rudder.publish(Float64(data=float(self.current_rudder)))
-        self.pub_sail.publish(Float64(data=float(self.current_sail)))
+        pub_rudder_deg = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_DEG)
+        pub_sail_deg = float(((self.current_sail_norm + 1.0) / 2.0) * Config.MAX_SAIL_ANGLE_DEG)
+        
+        self.pub_rudder.publish(Float64(data=pub_rudder_deg))
+        self.pub_sail.publish(Float64(data=pub_sail_deg))
         
         for _ in range(5):
             rclpy.spin_once(self.node, timeout_sec=0.1)
