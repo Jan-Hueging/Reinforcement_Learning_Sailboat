@@ -32,6 +32,10 @@ class RewardCalculator:
         # Time Penalty: Bestrafung für jeden vergangenen Zeitschritt (schneller ist besser)
         reward += Config.REWARD_TIME_PENALTY
 
+        # Heel Penalty: Bestrafung für starke Krängung (Schräglage)
+        heel_angle = state_dict['heel_angle']
+        reward += Config.PENALTY_HEEL * abs(heel_angle)
+
         terminated = False
         
         pos_x = state_dict['pos_x']

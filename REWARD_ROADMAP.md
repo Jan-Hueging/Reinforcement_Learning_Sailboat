@@ -31,8 +31,8 @@ Anstatt nur die absolute Distanz zu belohnen, belohnen wir die **effektive Gesch
 - **Zeit-Penalty:** Konstante kleine Strafe pro Zeitschritt (z.B. `-0.01`), damit das Boot motiviert ist, VMG zu maximieren und nicht zu trödeln.
 
 ### ToDos Stufe 2
-- [ ] Jitter-Penalty anhand der ausgeführten `action` Arrays implementieren.
-- [ ] Zeitstrafe kalibrieren, damit sie nicht den VMG-Reward überlagert.
+- [x] Jitter-Penalty anhand der ausgeführten `action` Arrays implementieren.
+- [x] Zeitstrafe kalibrieren, damit sie nicht den VMG-Reward überlagert.
 
 ---
 
@@ -44,7 +44,7 @@ Anstatt nur die absolute Distanz zu belohnen, belohnen wir die **effektive Gesch
 - **In-Irons-Penalty:** Strafe, wenn das Boot zu langsam ist UND direkt im Wind steht.
 
 ### ToDos Stufe 3
-- [ ] `heel_angle` als Parameter an die Reward-Funktion übergeben.
+- [x] `heel_angle` als Parameter an die Reward-Funktion übergeben.
 - [ ] Exponentielle Strafenfunktion für Krängung implementieren.
 - [ ] Parameter (Gewichtungen) so tunen, dass das Boot rechtzeitig das Segel öffnet (auffiert), um nicht zu kentern.
 

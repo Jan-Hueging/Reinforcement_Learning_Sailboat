@@ -19,7 +19,7 @@ class Config:
     DUMMY_HEEL_STIFFNESS = 0.1      # [rad*s/m] Krängungsfaktor
 
     TARGET_REWARD_RADIUS = 5.0      # [Meter]   Größe des Ziels
-    WORKSPACE_X_MIN = -100.0         # [Meter]   Linke Grenze des Arbeitsfeldes
+    WORKSPACE_X_MIN = -100.0        # [Meter]   Linke Grenze des Arbeitsfeldes
     WORKSPACE_X_MAX = 100.0         # [Meter]   Rechte Grenze des Arbeitsfeldes
     WORKSPACE_Y_MIN = -100.0        # [Meter]   Untere Grenze des Arbeitsfeldes
     WORKSPACE_Y_MAX = 100.0         # [Meter]   Obere Grenze des Arbeitsfeldes
@@ -68,6 +68,7 @@ class Config:
     REWARD_FAIL = -10.0             # [/]       Strafe    - Rausgefahren
     REWARD_TIME_PENALTY = -0.01     # [/]       Strafe    - Zeitdruck    
     PENALTY_ACTION_JITTER = -0.05   # [/]       Strafe    - Zucken
+    PENALTY_HEEL = -0.1             # [/]       Strafe    - Krängung (pro Radian Neigung)
 
 
     # ===============================================
