@@ -187,6 +187,7 @@ class SailboatEnv(gym.Env):
             'pos_x': pos[0],
             'pos_y': pos[1],
             'current_dist': current_dist,
+            'prev_dist': self.prev_dist,
             'v_linear': self.current_v_linear,
             'angle_to_target': self.current_rel_angle,
             'heel_angle': self.current_heel

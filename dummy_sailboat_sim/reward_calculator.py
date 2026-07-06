@@ -16,15 +16,16 @@ class RewardCalculator:
             tuple[float, bool]: (reward, terminated)
         """
         current_dist = state_dict['current_dist']
-        v_linear = state_dict['v_linear']
-        angle_to_target = state_dict['angle_to_target']
+        prev_dist = state_dict['prev_dist']
         
-        # 1. VMG (Velocity Made Good) berechnen
-        # Projizierte Geschwindigkeit in Richtung des Ziels
-        vmg = v_linear * math.cos(angle_to_target)
+        # 1. Potential-Based Reward (Echte Annäherung anstelle von theoretischer VMG)
+        # Wir messen die hart verdiente Meter-Ersparnis pro Zeitschritt und rechnen sie 
+        # in eine effektive "Velocity Made Good" (m/s) um, damit die Gewichtung gleich bleibt.
+        distance_reduction = prev_dist - current_dist
+        effective_vmg = distance_reduction / Config.STEP_TIME_SEC
         
-        # Belohnung primär über VMG
-        reward = vmg * Config.REWARD_VMG_MULTIPLIER
+        # Belohnung primär über echte Annäherung
+        reward = effective_vmg * Config.REWARD_VMG_MULTIPLIER
 
         # Action Jitter Penalty: Bestrafung für zu starkes Lenken / Segelziehen (Smoothness)
         reward += Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))

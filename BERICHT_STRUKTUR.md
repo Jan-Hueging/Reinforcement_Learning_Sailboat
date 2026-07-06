@@ -39,8 +39,9 @@ Dieses Dokument dient als roter Faden und Strukturvorlage für den Abschlussberi
 ## 4. Die Reward-Funktion
 
 - **Einleitung:** Mathematisches Definieren, was "gutes Segeln" ist.
-- **Velocity Made Good:** Distanz allein reicht nicht (verleitet dazu, im Kreis zu fahren) → Belohnung für *effektive Geschwindigkeit* in Richtung des Ziels.
-  - 🖼️ *Visualisierung:* Diagramm → Segelboot, dessen Geschwindigkeitsvektor in VMG und Quer-Geschwindigkeit zerlegt ist.
+- **Potential-Based Reward (Echte Annäherung):** Anstatt VMG über Winkel zu berechnen: Messen der Distanzänderung zwischen 2 Zeitschritten (`Alte_Distanz - Neue_Distanz`).
+  - **Warum?** Egal wie das Boot driftet oder rutscht, nur echte Meter-Ersparnis wird belohnt. 
+  - 🖼️ *Visualisierung:* Diagramm → Segelboot, das abdriftet, wobei gezeigt wird, dass die *echte* Distanzänderung genauer ist als der berechnete Winkel.
 - **Jitter-Penalty:** "ruckartige" Lenkmanöver werden bestraft (`abs(delta_rudder) + abs(delta_sail)`). Schont das Material und verhindert Strömungsabrisse.
 - **Kenter-Schutz:** *Exponentielle* Krängungsstrafe (`heel_angle ** 2`). Boot darf sich leicht neigen, um Fahrt aufzunehmen, wird aber kurz vor dem Kentern massiv bestraft.
 - **Time Penalty & Workspace:** KI bekommt stetig Minuspunkte für die verstrichene Zeit → Vermeidet Trödeln. Festes Arbeitsfeld (Bounding Box), um das Training zu stabilisieren.
