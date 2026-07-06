@@ -79,32 +79,77 @@ class StandaloneVisualizer:
         cv2.circle(img, (t_px, t_py), 16, (0, 255, 255), 2)  
         cv2.putText(img, f"TARGET", (t_px - 25, t_py - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
 
-        # Boot Rumpf
-        hull_length = 30
-        hull_width = 12
-        boat_pts = np.array([
-            [px + math.cos(self.theta) * hull_length, py - math.sin(self.theta) * hull_length],
-            [px + math.cos(self.theta - 2.5) * hull_width, py - math.sin(self.theta - 2.5) * hull_width],
-            [px - math.cos(self.theta) * (hull_length*0.2), py + math.sin(self.theta) * (hull_length*0.2)],
-            [px + math.cos(self.theta + 2.5) * hull_width, py - math.sin(self.theta + 2.5) * hull_width],
-        ], np.int32)
-        cv2.fillConvexPoly(img, boat_pts, (200, 200, 200))
-        cv2.polylines(img, [boat_pts], True, (255, 255, 255), 2)
+        # ==========================================
+        # Jollen-Design 
+        # ==========================================
+        L = 60.0  # Länge
+        W = 24.0  # Breite
 
-        # Ruder
-        stern_x = int(px - math.cos(self.theta) * (hull_length*0.2))
-        stern_y = int(py + math.sin(self.theta) * (hull_length*0.2))
+        # 1. Rumpf-Umriss (geschwungen, breites Heck, spitzer Bug)
+        hull_rel_pts = [
+            (L/2, 0),                 # Bugspitze
+            (L*0.25, W/2),            # Bugreling Backbord
+            (-L*0.3, W/2 * 0.95),     # Mitte Backbord
+            (-L/2, W/2 * 0.7),        # Heck Ecke Backbord
+            (-L/2 * 1.05, 0),         # Heck Mitte (leicht konvex)
+            (-L/2, -W/2 * 0.7),       # Heck Ecke Steuerbord
+            (-L*0.3, -W/2 * 0.95),    # Mitte Steuerbord
+            (L*0.25, -W/2),           # Bugreling Steuerbord
+        ]
+
+        def transform_pts(rel_pts):
+            pts = []
+            for x, y in rel_pts:
+                rx = px + x * math.cos(self.theta) - y * math.sin(self.theta)
+                ry = py - (x * math.sin(self.theta) + y * math.cos(self.theta))
+                pts.append([int(rx), int(ry)])
+            return np.array(pts, np.int32)
+
+        boat_pts = transform_pts(hull_rel_pts)
+
+        # Rumpf zeichnen (Weiß mit schwarzer Outline)
+        cv2.fillConvexPoly(img, boat_pts, (245, 245, 245))
+        cv2.polylines(img, [boat_pts], True, (20, 20, 20), 2)
+
+        # 2. Cockpit (die innere Öffnung)
+        cockpit_rel_pts = [
+            (L*0.1, W/2 * 0.65),      # Vorne Backbord
+            (-L*0.3, W/2 * 0.65),     # Hinten Backbord
+            (-L*0.42, W/2 * 0.4),     # Heck-Ecke Backbord
+            (-L*0.42, -W/2 * 0.4),    # Heck-Ecke Steuerbord
+            (-L*0.3, -W/2 * 0.65),    # Hinten Steuerbord
+            (L*0.1, -W/2 * 0.65),     # Vorne Steuerbord
+        ]
+        cockpit_pts = transform_pts(cockpit_rel_pts)
+        
+        # Cockpit zeichnen (Grauer Boden, dünne Outline)
+        cv2.fillConvexPoly(img, cockpit_pts, (150, 150, 150))
+        cv2.polylines(img, [cockpit_pts], True, (100, 100, 100), 1)
+
+        # 3. Mastloch (auf dem Deck vor dem Cockpit)
+        mast_x = int(px + (L * 0.25) * math.cos(self.theta))
+        mast_y = int(py - (L * 0.25) * math.sin(self.theta))
+        cv2.circle(img, (mast_x, mast_y), 3, (40, 40, 40), 2)
+
+        # ==========================================
+        # Dynamische Teile (Ruder & Segel)
+        # ==========================================
+
+        # Ruder (Pinne am Heck)
+        stern_x = int(px - math.cos(self.theta) * (L/2 * 1.05))
+        stern_y = int(py + math.sin(self.theta) * (L/2 * 1.05))
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 15)
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 15)
-        cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (0, 0, 255), 3)
+        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 20)
+        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 20)
+        # Pinne (Holzfarben/Rot)
+        cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (30, 30, 200), 3)
 
-        # Segel
+        # Segel (Weiß, leicht gebogen wirkend durch dicke Linie)
         actual_sail_rad = math.copysign(self.current_sail, self.wind_angle)
         sail_angle_global = self.theta + math.pi + actual_sail_rad
-        sail_end_x = int(px + math.cos(sail_angle_global) * 25)
-        sail_end_y = int(py - math.sin(sail_angle_global) * 25)
-        cv2.line(img, (px, py), (sail_end_x, sail_end_y), (255, 255, 255), 4)
+        sail_end_x = int(mast_x + math.cos(sail_angle_global) * 45)
+        sail_end_y = int(mast_y - math.sin(sail_angle_global) * 45)
+        cv2.line(img, (mast_x, mast_y), (sail_end_x, sail_end_y), (250, 250, 250), 4)
 
         # HUD / Telemetrie
         overlay = img.copy()
