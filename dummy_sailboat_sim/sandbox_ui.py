@@ -51,20 +51,48 @@ class StandaloneVisualizer:
         self.target_x = 32.5
         self.target_y = 9.0
 
-        # Schieberegler Setup
-        self.name_rudder = 'Ruder (-45 bis 45 Grad)'.rjust(30, ' ')
-        self.name_sail   = 'Segel (0 bis 70 Grad)'.rjust(30, ' ')
-
-        cv2.createTrackbar(self.name_rudder, self.window_name, 45, 90, self.update_controls)
-        cv2.createTrackbar(self.name_sail, self.window_name, 35, 70, self.update_controls)
+        # Eigene, moderne Schieberegler (On-Screen Overlay)
+        self.WIDTH, self.HEIGHT = 1000, 660
+        self.slider_rudder_val = 45 # 0..90
+        self.slider_sail_val = 35   # 0..70
+        self.dragging_rudder = False
+        self.dragging_sail = False
+        
+        cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
         print("🎨 Sandbox Visualizer gestartet! Ändere den Code in sandbox_ui.py um das Design anzupassen.")
 
-    def update_controls(self, _):
-        val_rudder = cv2.getTrackbarPos(self.name_rudder, self.window_name)
-        val_sail = cv2.getTrackbarPos(self.name_sail, self.window_name)
-        self.current_rudder = math.radians(val_rudder - 45.0)
-        self.current_sail = math.radians(float(val_sail))
+    def mouse_callback(self, event, x, y, flags, param):
+        rudder_rect = (550, self.HEIGHT - 120, 350, 15)
+        sail_rect   = (550, self.HEIGHT - 60, 350, 15)
+        
+        def get_val(rect, max_val):
+            rx, ry, rw, rh = rect
+            if rx <= x <= rx + rw:
+                return int(max(0.0, min(1.0, (x - rx) / rw)) * max_val)
+            elif x < rx: return 0
+            else: return max_val
+            
+        def hit(rect):
+            rx, ry, rw, rh = rect
+            return rx - 20 <= x <= rx + rw + 20 and ry - 15 <= y <= ry + rh + 15
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            if hit(rudder_rect):
+                self.slider_rudder_val = get_val(rudder_rect, 90)
+                self.dragging_rudder = True
+            elif hit(sail_rect):
+                self.slider_sail_val = get_val(sail_rect, 70)
+                self.dragging_sail = True
+        elif event == cv2.EVENT_MOUSEMOVE:
+            if self.dragging_rudder: self.slider_rudder_val = get_val(rudder_rect, 90)
+            if self.dragging_sail: self.slider_sail_val = get_val(sail_rect, 70)
+        elif event == cv2.EVENT_LBUTTONUP:
+            self.dragging_rudder = False
+            self.dragging_sail = False
+
+        self.current_rudder = math.radians(self.slider_rudder_val - 45.0)
+        self.current_sail = math.radians(self.slider_sail_val)
 
 
 
@@ -80,7 +108,7 @@ class StandaloneVisualizer:
         self.wind_angle = self.debug_true_wind_angle
 
     def render_loop(self):
-        WIDTH, HEIGHT = 1000, 660
+        WIDTH, HEIGHT = self.WIDTH, self.HEIGHT
         # Wasser-Hintergrund (Tiefblau)
         img = np.full((HEIGHT, WIDTH, 3), (60, 30, 10), dtype=np.uint8)
         cx, cy = int(WIDTH * 0.15), HEIGHT // 2
@@ -294,6 +322,29 @@ class StandaloneVisualizer:
                 for c in range(3):
                     img[y1:y2, x1:x2, c] = (alpha_s * rotated_wind[y1o:y2o, x1o:x2o, c] +
                                             alpha_l * img[y1:y2, x1:x2, c])
+
+        # ==========================================
+        # Moderne On-Screen Regler zeichnen
+        # ==========================================
+        def draw_slider(img, text, rect, val, max_val, disp_val, suffix=""):
+            rx, ry, rw, rh = rect
+            # Hintergrund-Box
+            cv2.rectangle(img, (rx - 150, ry - 15), (rx + rw + 20, ry + rh + 15), (20, 20, 25), -1)
+            cv2.rectangle(img, (rx - 150, ry - 15), (rx + rw + 20, ry + rh + 15), (80, 80, 80), 1)
+            # Track
+            cv2.rectangle(img, (rx, ry + rh//2 - 2), (rx + rw, ry + rh//2 + 2), (60, 60, 60), -1)
+            # Active Track
+            k_x = rx + int((val / max_val) * rw)
+            cv2.rectangle(img, (rx, ry + rh//2 - 2), (k_x, ry + rh//2 + 2), (0, 200, 255), -1)
+            # Knob
+            cv2.circle(img, (k_x, ry + rh//2), 10, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(img, (k_x, ry + rh//2), 10, (100, 100, 100), 1, cv2.LINE_AA)
+            # Label
+            label = f"{text}: {disp_val}{suffix}"
+            cv2.putText(img, label, (rx - 130, ry + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+
+        draw_slider(img, "Ruder", (550, HEIGHT - 120, 350, 15), self.slider_rudder_val, 90, self.slider_rudder_val - 45, " Grad")
+        draw_slider(img, "Segel", (550, HEIGHT - 60, 350, 15), self.slider_sail_val, 70, self.slider_sail_val, " Grad")
 
         cv2.imshow(self.window_name, img)
         return cv2.waitKey(30)
