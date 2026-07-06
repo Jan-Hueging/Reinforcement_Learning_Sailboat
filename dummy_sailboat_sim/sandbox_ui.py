@@ -153,16 +153,18 @@ class StandaloneVisualizer:
         L = 60.0  # Länge
         W = 24.0  # Breite
 
-        # 1. Rumpf-Umriss (geschwungen, breites Heck, spitzer Bug)
+        # 1. Rumpf-Umriss (geschwungen, breites Heck, abgerundeter Bug)
         hull_rel_pts = [
-            (L/2, 0),                 # Bugspitze
-            (L*0.25, W/2),            # Bugreling Backbord
-            (-L*0.3, W/2 * 0.95),     # Mitte Backbord
-            (-L/2, W/2 * 0.7),        # Heck Ecke Backbord
-            (-L/2 * 1.05, 0),         # Heck Mitte (leicht konvex)
-            (-L/2, -W/2 * 0.7),       # Heck Ecke Steuerbord
-            (-L*0.3, -W/2 * 0.95),    # Mitte Steuerbord
+            (L*0.46, W*0.18),         # Bug Backbord
+            (L*0.5, 0),               # Bug Mitte (abgerundet)
+            (L*0.46, -W*0.18),        # Bug Steuerbord
             (L*0.25, -W/2),           # Bugreling Steuerbord
+            (-L*0.3, -W/2 * 0.95),    # Mitte Steuerbord
+            (-L/2, -W/2 * 0.7),       # Heck Ecke Steuerbord
+            (-L/2 * 1.05, 0),         # Heck Mitte (leicht konvex)
+            (-L/2, W/2 * 0.7),        # Heck Ecke Backbord
+            (-L*0.3, W/2 * 0.95),     # Mitte Backbord
+            (L*0.25, W/2),            # Bugreling Backbord
         ]
 
         def transform_pts(rel_pts):
@@ -194,9 +196,10 @@ class StandaloneVisualizer:
         cv2.fillConvexPoly(img, cockpit_pts, (150, 150, 150))
         cv2.polylines(img, [cockpit_pts], True, (100, 100, 100), 1)
 
-        # 3. Mastloch (auf dem Deck vor dem Cockpit)
-        mast_x = int(px + (L * 0.25) * math.cos(self.theta))
-        mast_y = int(py - (L * 0.25) * math.sin(self.theta))
+        # 3. Mastloch (weiter hinten, nicht ganz mittig)
+        mast_offset = L * 0.15
+        mast_x = int(px + mast_offset * math.cos(self.theta))
+        mast_y = int(py - mast_offset * math.sin(self.theta))
         cv2.circle(img, (mast_x, mast_y), 3, (40, 40, 40), 2)
 
         # ==========================================
@@ -207,16 +210,16 @@ class StandaloneVisualizer:
         stern_x = int(px - math.cos(self.theta) * (L/2 * 1.05))
         stern_y = int(py + math.sin(self.theta) * (L/2 * 1.05))
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 20)
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 20)
+        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 15)
+        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 15)
         # Pinne (Holzfarben/Rot)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (30, 30, 200), 3)
 
         # Segel (Weiß, leicht gebogen wirkend durch dicke Linie)
         actual_sail_rad = math.copysign(self.current_sail, self.wind_angle)
         sail_angle_global = self.theta + math.pi + actual_sail_rad
-        sail_end_x = int(mast_x + math.cos(sail_angle_global) * 45)
-        sail_end_y = int(mast_y - math.sin(sail_angle_global) * 45)
+        sail_end_x = int(mast_x + math.cos(sail_angle_global) * 34)
+        sail_end_y = int(mast_y - math.sin(sail_angle_global) * 34)
         cv2.line(img, (mast_x, mast_y), (sail_end_x, sail_end_y), (250, 250, 250), 4)
 
         # HUD / Telemetrie
