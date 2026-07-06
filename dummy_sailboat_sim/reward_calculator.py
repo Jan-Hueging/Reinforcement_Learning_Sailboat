@@ -2,7 +2,9 @@ from dummy_sailboat_sim.config import Config
 import math
 class RewardCalculator:
     def __init__(self):
-        pass
+        self.latest_breakdown = {
+            'VMG': 0.0, 'Jitter': 0.0, 'Time': 0.0, 'Heel': 0.0, 'Term': 0.0, 'Total': 0.0
+        }
 
     def calculate(self, state_dict: dict, action: list) -> tuple[float, bool]:
         """
@@ -18,24 +20,23 @@ class RewardCalculator:
         current_dist = state_dict['current_dist']
         prev_dist = state_dict['prev_dist']
         
-        # 1. Potential-Based Reward (Echte Annäherung anstelle von theoretischer VMG)
-        # Wir messen die hart verdiente Meter-Ersparnis pro Zeitschritt und rechnen sie 
-        # in eine effektive "Velocity Made Good" (m/s) um, damit die Gewichtung gleich bleibt.
+        # 1. Potential-Based Reward
         distance_reduction = prev_dist - current_dist
         effective_vmg = distance_reduction / Config.STEP_TIME_SEC
-        
-        # Belohnung primär über echte Annäherung
-        reward = effective_vmg * Config.REWARD_VMG_MULTIPLIER
+        r_vmg = effective_vmg * Config.REWARD_VMG_MULTIPLIER
 
-        # Action Jitter Penalty: Bestrafung für zu starkes Lenken / Segelziehen (Smoothness)
-        reward += Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))
+        # Action Jitter Penalty
+        r_jitter = Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))
         
-        # Time Penalty: Bestrafung für jeden vergangenen Zeitschritt (schneller ist besser)
-        reward += Config.REWARD_TIME_PENALTY
+        # Time Penalty
+        r_time = Config.REWARD_TIME_PENALTY
 
-        # Heel Penalty: Bestrafung für starke Krängung (Schräglage exponentiell)
+        # Heel Penalty
         heel_angle = state_dict['heel_angle']
-        reward += Config.PENALTY_HEEL * (heel_angle ** 2)
+        r_heel = Config.PENALTY_HEEL * (heel_angle ** 2)
+
+        reward = r_vmg + r_jitter + r_time + r_heel
+        r_term = 0.0
 
         terminated = False
         
@@ -44,11 +45,22 @@ class RewardCalculator:
         
         # Abbruchbedingungen und finale Rewards/Penalties
         if current_dist < Config.TARGET_REWARD_RADIUS: 
-            reward += Config.REWARD_SUCCESS 
+            r_term = Config.REWARD_SUCCESS 
+            reward += r_term
             terminated = True
         elif pos_x < Config.WORKSPACE_X_MIN or pos_x > Config.WORKSPACE_X_MAX or \
              pos_y < Config.WORKSPACE_Y_MIN or pos_y > Config.WORKSPACE_Y_MAX:
-            reward += Config.REWARD_FAIL
+            r_term = Config.REWARD_FAIL
+            reward += r_term
             terminated = True
+            
+        self.latest_breakdown = {
+            'VMG': r_vmg,
+            'Jitter': r_jitter,
+            'Time': r_time,
+            'Heel': r_heel,
+            'Term': r_term,
+            'Total': float(reward)
+        }
             
         return float(reward), terminated

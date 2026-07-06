@@ -58,10 +58,17 @@ class StandaloneVisualizer:
         self.slider_sail_val = 35   # 0..70
         self.dragging_rudder = False
         self.dragging_sail = False
+
+        import sys
+        import os
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from dummy_sailboat_sim.reward_calculator import RewardCalculator
+        self.reward_calc = RewardCalculator()
+        self.prev_dist = 0.0
         
         cv2.setMouseCallback(self.window_name, self.mouse_callback)
 
-        print("🎨 Sandbox Visualizer gestartet! Ändere den Code in sandbox_ui.py um das Design anzupassen.")
+        print("Sandbox Visualizer gestartet! Aendere den Code in sandbox_ui.py um das Design anzupassen.")
 
     def mouse_callback(self, event, x, y, flags, param):
         rudder_rect = (550, self.HEIGHT - 120, 350, 15)
@@ -110,6 +117,20 @@ class StandaloneVisualizer:
         
         # Ziel-Kollision prüfen und neu spawnen (wie im RL-Training)
         dist_to_target = math.hypot(self.target_x - self.x, self.target_y - self.y)
+        
+        # REWARD BERECHNUNG FÜR LOG
+        state_dict = {
+            'pos_x': self.x,
+            'pos_y': self.y,
+            'current_dist': dist_to_target,
+            'prev_dist': getattr(self, 'prev_dist', dist_to_target),
+            'v_linear': self.speed,
+            'angle_to_target': 0.0,
+            'heel_angle': 0.0
+        }
+        self.reward_calc.calculate(state_dict, [0.0, 0.0]) # Aktionen simulieren wir mal mit 0
+        self.prev_dist = dist_to_target
+
         if dist_to_target < 5.0:  # 5 Meter Radius
             import random
             self.target_x = random.uniform(10.0, 80.0)
@@ -265,12 +286,24 @@ class StandaloneVisualizer:
         # HUD / Telemetrie
         overlay = img.copy()
         cv2.rectangle(overlay, (10, 10), (250, 140), (0, 0, 0), -1)
-        cv2.rectangle(overlay, (10, 150), (250, 280), (0, 0, 0), -1)
+        # Neues HUD für den REWARD LOG
+        cv2.rectangle(overlay, (10, 150), (250, 320), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, img, 0.4, 0, img)
         
         cv2.putText(img, "TELEMETRY", (20, 35), cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(img, "-" * 30, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
         cv2.putText(img, f"Speed: {self.speed:.2f} m/s", (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
+        
+        # Reward Log Texte
+        cv2.putText(img, "REWARD LOG", (20, 175), cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, "-" * 30, (20, 190), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        
+        breakdown = self.reward_calc.latest_breakdown
+        cv2.putText(img, f"VMG:    {breakdown.get('VMG', 0.0):+8.4f}", (20, 215), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        cv2.putText(img, f"Jitter: {breakdown.get('Jitter', 0.0):+8.4f}", (20, 235), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.putText(img, f"Time:   {breakdown.get('Time', 0.0):+8.4f}", (20, 255), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.putText(img, f"Heel:   {breakdown.get('Heel', 0.0):+8.4f}", (20, 275), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.putText(img, f"TOTAL:  {breakdown.get('Total', 0.0):+8.4f}", (20, 305), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 1, cv2.LINE_AA)
         
         # ==========================================
         # Moderner Wind-Indikator (Uhr-Style, transparent)
