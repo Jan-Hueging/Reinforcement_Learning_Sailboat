@@ -24,8 +24,8 @@ class Config:
     WORKSPACE_Y_MIN = -100.0        # [Meter]   Untere Grenze des Arbeitsfeldes
     WORKSPACE_Y_MAX = 100.0         # [Meter]   Obere Grenze des Arbeitsfeldes
     
-    TARGET_SPAWN_X = (20.0, 75.0)   # [Meter]   Zielbereich X
-    TARGET_SPAWN_Y = (-50.0, 50.0)  # [Meter]   Zielbereich Y
+    TARGET_SPAWN_X = (10.0, 80.0)   # [Meter]   Zielbereich X (gesamte Sichtfläche vor dem Boot)
+    TARGET_SPAWN_Y = (-30.0, 30.0)  # [Meter]   Zielbereich Y (gesamte Sichtfläche)
 
     WIND_SPEED_DEFAULT = 5.0        # [m/s]     konst. Windgeschwindigkeit
     WIND_ANGLE_DEFAULT = 0.0        # [rad]     konst. Windrichtung (Rückenwind)

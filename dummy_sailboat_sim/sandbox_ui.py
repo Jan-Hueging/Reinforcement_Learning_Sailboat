@@ -48,8 +48,9 @@ class StandaloneVisualizer:
         self.debug_true_wind_speed = 5.0
         self.debug_true_wind_angle = 0.0
         
-        self.target_x = 32.5
-        self.target_y = 9.0
+        import random
+        self.target_x = random.uniform(10.0, 80.0)
+        self.target_y = random.uniform(-30.0, 30.0)
 
         # Eigene, moderne Schieberegler (On-Screen Overlay)
         self.WIDTH, self.HEIGHT = 1000, 660
@@ -106,6 +107,13 @@ class StandaloneVisualizer:
         self.debug_true_wind_angle += 0.02
         self.debug_true_wind_angle %= (2 * math.pi)
         self.wind_angle = self.debug_true_wind_angle
+        
+        # Ziel-Kollision prüfen und neu spawnen (wie im RL-Training)
+        dist_to_target = math.hypot(self.target_x - self.x, self.target_y - self.y)
+        if dist_to_target < 5.0:  # 5 Meter Radius
+            import random
+            self.target_x = random.uniform(10.0, 80.0)
+            self.target_y = random.uniform(-30.0, 30.0)
 
     def render_loop(self):
         WIDTH, HEIGHT = self.WIDTH, self.HEIGHT
@@ -113,13 +121,17 @@ class StandaloneVisualizer:
         img = np.full((HEIGHT, WIDTH, 3), (60, 30, 10), dtype=np.uint8)
         cx, cy = int(WIDTH * 0.15), HEIGHT // 2
         
-        # Gitternetz (Ozean-Grid)
-        for i in range(0, WIDTH, 50):
-            cv2.line(img, (i, 0), (i, HEIGHT), (80, 45, 20), 1)
-            cv2.line(img, (0, i), (WIDTH, i), (80, 45, 20), 1)
+        # Umrechnung Boot-Position & Zoom (10.0 = 4x so viel Fläche sichtbar wie vorher)
+        self.scale = 10.0
         
-        # Umrechnung Boot-Position
-        self.scale = 20.0
+        # Gitternetz (Ozean-Grid - 10 Meter Raster in der echten Welt)
+        grid_step = max(10, int(10 * self.scale))
+        for i in range(0, max(WIDTH, HEIGHT), grid_step):
+            if i < WIDTH:
+                cv2.line(img, (i, 0), (i, HEIGHT), (80, 45, 20), 1)
+            if i < HEIGHT:
+                cv2.line(img, (0, i), (WIDTH, i), (80, 45, 20), 1)
+        
         px = int(cx + self.x * self.scale) % WIDTH
         py = int(cy - self.y * self.scale) % HEIGHT
 
@@ -178,8 +190,8 @@ class StandaloneVisualizer:
         # ==========================================
         # Jollen-Design 
         # ==========================================
-        L = 60.0  # Länge
-        W = 24.0  # Breite
+        L = 4.5 * self.scale  # Länge (4.5 Meter, 50% größer)
+        W = 1.8 * self.scale  # Breite (1.8 Meter, 50% größer)
 
         # 1. Rumpf-Umriss (geschwungen, breites Heck, abgerundeter Bug)
         hull_rel_pts = [
@@ -238,16 +250,16 @@ class StandaloneVisualizer:
         stern_x = int(px - math.cos(self.theta) * (L/2 * 1.05))
         stern_y = int(py + math.sin(self.theta) * (L/2 * 1.05))
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 15)
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 15)
+        rudder_end_x = int(stern_x - math.cos(rudder_angle) * (1.1 * self.scale))
+        rudder_end_y = int(stern_y + math.sin(rudder_angle) * (1.1 * self.scale))
         # Pinne (Holzfarben/Rot)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (30, 30, 200), 3)
 
         # Segel (Weiß, leicht gebogen wirkend durch dicke Linie)
         actual_sail_rad = math.copysign(self.current_sail, self.wind_angle)
         sail_angle_global = self.theta + math.pi + actual_sail_rad
-        sail_end_x = int(mast_x + math.cos(sail_angle_global) * 34)
-        sail_end_y = int(mast_y - math.sin(sail_angle_global) * 34)
+        sail_end_x = int(mast_x + math.cos(sail_angle_global) * (2.55 * self.scale))
+        sail_end_y = int(mast_y - math.sin(sail_angle_global) * (2.55 * self.scale))
         cv2.line(img, (mast_x, mast_y), (sail_end_x, sail_end_y), (250, 250, 250), 4)
 
         # HUD / Telemetrie
