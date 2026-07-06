@@ -68,7 +68,7 @@ class Config:
     REWARD_FAIL = -10.0             # [/]       Strafe    - Rausgefahren
     REWARD_TIME_PENALTY = -0.01     # [/]       Strafe    - Zeitdruck    
     PENALTY_ACTION_JITTER = -0.05   # [/]       Strafe    - Zucken
-    PENALTY_HEEL = -0.1             # [/]       Strafe    - Krängung (pro Radian Neigung)
+    PENALTY_HEEL = -1.0             # [/]       Strafe    - Krängung (wird mit Winkel^2 multipliziert)
 
 
     # ===============================================
