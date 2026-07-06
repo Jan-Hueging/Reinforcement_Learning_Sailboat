@@ -19,7 +19,11 @@ class Config:
     DUMMY_HEEL_STIFFNESS = 0.1      # [rad*s/m] Krängungsfaktor
 
     TARGET_REWARD_RADIUS = 5.0      # [Meter]   Größe des Ziels
-    OUT_OF_BOUNDS_RADIUS = 150.0    # [Meter]   Out of Bounds
+    WORKSPACE_X_MIN = -100.0         # [Meter]   Linke Grenze des Arbeitsfeldes
+    WORKSPACE_X_MAX = 100.0         # [Meter]   Rechte Grenze des Arbeitsfeldes
+    WORKSPACE_Y_MIN = -100.0        # [Meter]   Untere Grenze des Arbeitsfeldes
+    WORKSPACE_Y_MAX = 100.0         # [Meter]   Obere Grenze des Arbeitsfeldes
+    
     TARGET_SPAWN_X = (20.0, 75.0)   # [Meter]   Zielbereich X
     TARGET_SPAWN_Y = (-50.0, 50.0)  # [Meter]   Zielbereich Y
 

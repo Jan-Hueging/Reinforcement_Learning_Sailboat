@@ -184,6 +184,8 @@ class SailboatEnv(gym.Env):
         # REWARD-BERECHNUNG (ausgelagert)
         # ==========================================
         state_dict = {
+            'pos_x': pos[0],
+            'pos_y': pos[1],
             'current_dist': current_dist,
             'v_linear': self.current_v_linear,
             'angle_to_target': self.current_rel_angle,

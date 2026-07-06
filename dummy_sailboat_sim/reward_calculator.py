@@ -34,11 +34,15 @@ class RewardCalculator:
 
         terminated = False
         
+        pos_x = state_dict['pos_x']
+        pos_y = state_dict['pos_y']
+        
         # Abbruchbedingungen und finale Rewards/Penalties
         if current_dist < Config.TARGET_REWARD_RADIUS: 
             reward += Config.REWARD_SUCCESS 
             terminated = True
-        elif current_dist > Config.OUT_OF_BOUNDS_RADIUS: 
+        elif pos_x < Config.WORKSPACE_X_MIN or pos_x > Config.WORKSPACE_X_MAX or \
+             pos_y < Config.WORKSPACE_Y_MIN or pos_y > Config.WORKSPACE_Y_MAX:
             reward += Config.REWARD_FAIL
             terminated = True
             
