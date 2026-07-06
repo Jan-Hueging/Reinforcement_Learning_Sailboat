@@ -48,8 +48,8 @@ class StandaloneVisualizer:
         self.debug_true_wind_speed = 5.0
         self.debug_true_wind_angle = 0.0
         
-        self.target_x = 40.0
-        self.target_y = 30.0
+        self.target_x = 32.5
+        self.target_y = 9.0
 
         # Schieberegler Setup
         self.name_rudder = 'Ruder (-45 bis 45 Grad)'.rjust(30, ' ')
@@ -80,7 +80,7 @@ class StandaloneVisualizer:
         self.wind_angle = self.debug_true_wind_angle
 
     def render_loop(self):
-        WIDTH, HEIGHT = 1000, 1000
+        WIDTH, HEIGHT = 1000, 660
         # Wasser-Hintergrund (Tiefblau)
         img = np.full((HEIGHT, WIDTH, 3), (60, 30, 10), dtype=np.uint8)
         cx, cy = int(WIDTH * 0.15), HEIGHT // 2
@@ -99,10 +99,53 @@ class StandaloneVisualizer:
         t_px = int(cx + self.target_x * self.scale) % WIDTH
         t_py = int(cy - self.target_y * self.scale) % HEIGHT
         
-        # Ziel-Marker
-        cv2.circle(img, (t_px, t_py), 12, (0, 165, 255), -1) 
-        cv2.circle(img, (t_px, t_py), 16, (0, 255, 255), 2)  
-        cv2.putText(img, f"TARGET", (t_px - 25, t_py - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+        # 1. Führungslinie vom Boot zum Ziel (gestrichelt)
+        dist = math.hypot(t_px - px, t_py - py)
+        if dist > 0:
+            dx, dy = (t_px - px)/dist, (t_py - py)/dist
+            dash_len = 10
+            for i in range(0, int(dist), dash_len * 2):
+                p1 = (int(px + dx * i), int(py + dy * i))
+                p2_dist = min(i + dash_len, int(dist))
+                p2 = (int(px + dx * p2_dist), int(py + dy * p2_dist))
+                cv2.line(img, p1, p2, (100, 100, 100), 1, cv2.LINE_AA)
+        
+        # 2. Moderner Ziel-Marker (Dunkelgrau)
+        target_color = (160, 160, 160) # Modernes helles Grau für besseren Kontrast auf Dunkelblau
+        
+        # Zielflagge statt eines einfachen Punktes
+        # Fahnenmast
+        cv2.line(img, (t_px, t_py), (t_px, t_py - 16), target_color, 2, cv2.LINE_AA)
+        
+        # Schachbrett-Muster (Zielflagge)
+        flag_w, flag_h = 4, 4
+        start_x, start_y = t_px + 1, t_py - 16
+        for row in range(3):
+            for col in range(4):
+                color = (250, 250, 250) if (row + col) % 2 == 0 else (30, 30, 30)
+                pt1 = (start_x + col * flag_w, start_y + row * flag_h)
+                pt2 = (start_x + (col + 1) * flag_w, start_y + (row + 1) * flag_h)
+                cv2.rectangle(img, pt1, pt2, color, -1)
+                
+        # Zarte Umrandung um die Fahne für mehr Kontrast
+        cv2.rectangle(img, (start_x, start_y), (start_x + 4 * flag_w, start_y + 3 * flag_h), target_color, 1)
+        # Kleiner Sockelpunkt unten am Mast, um exakt die Mitte zu markieren
+        cv2.circle(img, (t_px, t_py), 2, target_color, -1, cv2.LINE_AA)
+        
+        # 3 Distanz-Ringe basierend auf dem echten Radius (1m und 5m)
+        r_1m = int(1.0 * self.scale)
+        r_5m = int(5.0 * self.scale)
+        
+        cv2.circle(img, (t_px, t_py), r_1m, target_color, 1, cv2.LINE_AA)
+        cv2.circle(img, (t_px, t_py), r_5m, target_color, 1, cv2.LINE_AA)
+        
+        # Ziel-Beschriftung & Ring-Labels
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(img, "TARGET", (t_px + r_1m + 5, t_py - 5), font, 0.45, target_color, 1, cv2.LINE_AA)
+        
+        # Labels für die Radien (leicht versetzt auf den Linien)
+        cv2.putText(img, "1m", (t_px + 2, t_py - r_1m - 4), font, 0.35, target_color, 1, cv2.LINE_AA)
+        cv2.putText(img, "5m", (t_px + 2, t_py - r_5m - 4), font, 0.35, target_color, 1, cv2.LINE_AA)
 
         # ==========================================
         # Jollen-Design 
