@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 import math
 import os
+import time
+from rclpy.parameter import Parameter
 
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Point, Vector3
@@ -18,8 +20,10 @@ class VisualizerNode(Node):
 
         self.x, self.y, self.theta, self.speed = 0.0, 0.0, 0.0, 0.0
         self.wind_speed, self.wind_angle = 0.0, 0.0
-        self.current_rudder = math.radians(Config.INITIAL_RUDDER_ANGLE_DEG)
-        self.current_sail = math.radians(Config.INITIAL_SAIL_ANGLE_DEG)
+        self.current_rudder = Config.INITIAL_RUDDER_ANGLE_RAD
+        self.current_sail = Config.INITIAL_SAIL_ANGLE_RAD
+        self.soll_rudder = 0.0
+        self.soll_sail = 0.0
         self.debug_true_wind_speed = 5.0
         self.debug_true_wind_angle = 0.0
 
@@ -47,84 +51,31 @@ class VisualizerNode(Node):
         self.create_subscription(Float64, Config.TOPIC_WIND_SPEED, self.wind_speed_cb, 10)
         self.create_subscription(Float64, Config.TOPIC_WIND_DIR, self.wind_dir_cb, 10)
 
-        # Eigene, moderne Schieberegler (On-Screen Overlay)
+        # Konstanten für das Fenster
         self.WIDTH, self.HEIGHT = 1000, 1000
-        self.slider_rudder_val = 45 # 0..90
-        self.slider_sail_val = 35   # 0..70
-        self.slider_wspeed_val = 5  # 0..20
-        self.slider_wangle_val = 0  # 0..360
-        self.dragging_rudder = False
-        self.dragging_sail = False
-        self.dragging_wspeed = False
-        self.dragging_wangle = False
         
-        cv2.setMouseCallback(self.window_name, self.mouse_callback)
+        # Publisher für Wetter (falls noch manuell Wetter gemacht wird)
+        self.pub_weather = self.create_publisher(Vector3, '/debug/true_wind', 10)
 
         self.create_timer(1.0 / 30.0, self.render_loop)
         self.get_logger().info('Radar hochgefahren! Fenster sollte offen sein.')
 
         # Speicher für das dynamische Ziel
-        self.target_x = 0.0
-        self.target_y = 0.0
+        import numpy as np
+        import math
+        radius = float(np.random.uniform(Config.TARGET_SPAWN_RADIUS[0], Config.TARGET_SPAWN_RADIUS[1]))
+        angle = float(np.random.uniform(-math.pi, math.pi))
+        self.target_x = radius * math.cos(angle)
+        self.target_y = radius * math.sin(angle)
 
         # Subscriber Ruder, Segel & Ziel
         self.create_subscription(Vector3, '/navigation/target', self.target_cb, 10)
-        self.create_subscription(Float64, Config.TOPIC_RUDDER_IST, self.cmd_rudder_cb, 10)
-        self.create_subscription(Float64, Config.TOPIC_SAIL_IST, self.cmd_sail_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_RUDDER_IST, self.ist_rudder_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_SAIL_IST, self.ist_sail_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_RUDDER_SOLL, self.soll_rudder_cb, 10)
+        self.create_subscription(Float64, Config.TOPIC_SAIL_SOLL, self.soll_sail_cb, 10)
 
-    def mouse_callback(self, event, x, y, flags, param):
-        rudder_rect = (550, self.HEIGHT - 240, 350, 15)
-        sail_rect   = (550, self.HEIGHT - 180, 350, 15)
-        wspeed_rect = (550, self.HEIGHT - 120, 350, 15)
-        wangle_rect = (550, self.HEIGHT - 60,  350, 15)
-        
-        def get_val(rect, max_val):
-            rx, ry, rw, rh = rect
-            if rx <= x <= rx + rw:
-                return int(max(0.0, min(1.0, (x - rx) / rw)) * max_val)
-            elif x < rx: return 0
-            else: return max_val
-            
-        def hit(rect):
-            rx, ry, rw, rh = rect
-            return rx - 20 <= x <= rx + rw + 20 and ry - 15 <= y <= ry + rh + 15
-
-        if event == cv2.EVENT_LBUTTONDOWN:
-            if hit(rudder_rect):
-                self.slider_rudder_val = get_val(rudder_rect, 90)
-                self.dragging_rudder = True
-            elif hit(sail_rect):
-                self.slider_sail_val = get_val(sail_rect, 70)
-                self.dragging_sail = True
-            elif hit(wspeed_rect):
-                self.slider_wspeed_val = get_val(wspeed_rect, 20)
-                self.dragging_wspeed = True
-            elif hit(wangle_rect):
-                self.slider_wangle_val = get_val(wangle_rect, 360)
-                self.dragging_wangle = True
-        elif event == cv2.EVENT_MOUSEMOVE:
-            if self.dragging_rudder: self.slider_rudder_val = get_val(rudder_rect, 90)
-            if self.dragging_sail: self.slider_sail_val = get_val(sail_rect, 70)
-            if self.dragging_wspeed: self.slider_wspeed_val = get_val(wspeed_rect, 20)
-            if self.dragging_wangle: self.slider_wangle_val = get_val(wangle_rect, 360)
-        elif event == cv2.EVENT_LBUTTONUP:
-            self.dragging_rudder = False
-            self.dragging_sail = False
-            self.dragging_wspeed = False
-            self.dragging_wangle = False
-
-        if self.dragging_rudder or self.dragging_sail:
-            rudder_deg = self.slider_rudder_val - 45.0
-            sail_deg = float(self.slider_sail_val)
-            self.pub_rudder.publish(Float64(data=rudder_deg))
-            self.pub_sail.publish(Float64(data=sail_deg))
-            
-        if self.dragging_wspeed or self.dragging_wangle:
-            w_speed = float(self.slider_wspeed_val)
-            w_angle_rad = math.radians(float(self.slider_wangle_val))
-            self.debug_true_wind_speed = w_speed
-            self.debug_true_wind_angle = w_angle_rad
-            self.pub_weather.publish(Vector3(x=w_speed, y=w_angle_rad, z=0.0))
+    # Mouse callback wurde entfernt
 
     def gps_cb(self, msg):
         self.x = msg.x
@@ -143,11 +94,17 @@ class VisualizerNode(Node):
         self.target_x = msg.x
         self.target_y = msg.y
 
-    def cmd_rudder_cb(self, msg):
-        self.current_rudder = math.radians(msg.data)
+    def ist_rudder_cb(self, msg):
+        self.current_rudder = msg.data
 
-    def cmd_sail_cb(self, msg):
-        self.current_sail = math.radians(msg.data)
+    def ist_sail_cb(self, msg):
+        self.current_sail = msg.data
+        
+    def soll_rudder_cb(self, msg):
+        self.soll_rudder = msg.data
+
+    def soll_sail_cb(self, msg):
+        self.soll_sail = msg.data
 
     def render_loop(self):
         WIDTH, HEIGHT = self.WIDTH, self.HEIGHT
@@ -160,10 +117,10 @@ class VisualizerNode(Node):
             if i < WIDTH: cv2.line(img, (i, 0), (i, HEIGHT), (80, 45, 20), 1)
             if i < HEIGHT: cv2.line(img, (0, i), (WIDTH, i), (80, 45, 20), 1)
         
-        px = int(cx + self.x * self.scale) % WIDTH
-        py = int(cy - self.y * self.scale) % HEIGHT
-        t_px = int(cx + self.target_x * self.scale) % WIDTH
-        t_py = int(cy - self.target_y * self.scale) % HEIGHT
+        px = int(cx - self.y * self.scale) % WIDTH
+        py = int(cy - self.x * self.scale) % HEIGHT
+        t_px = int(cx - self.target_y * self.scale) % WIDTH
+        t_py = int(cy - self.target_x * self.scale) % HEIGHT
         
         dist = math.hypot(t_px - px, t_py - py)
         if dist > 0:
@@ -206,8 +163,10 @@ class VisualizerNode(Node):
         ]
         pts = []
         for x, y in hull_rel_pts:
-            rx = px + x * math.cos(self.theta) - y * math.sin(self.theta)
-            ry = py - (x * math.sin(self.theta) + y * math.cos(self.theta))
+            world_dx = x * math.cos(self.theta) - y * math.sin(self.theta)
+            world_dy = x * math.sin(self.theta) + y * math.cos(self.theta)
+            rx = px - world_dy
+            ry = py - world_dx
             pts.append([int(rx), int(ry)])
         boat_pts = np.array(pts, np.int32)
         cv2.fillConvexPoly(img, boat_pts, (245, 245, 245))
@@ -219,29 +178,43 @@ class VisualizerNode(Node):
         ]
         c_pts = []
         for x, y in cockpit_rel_pts:
-            rx = px + x * math.cos(self.theta) - y * math.sin(self.theta)
-            ry = py - (x * math.sin(self.theta) + y * math.cos(self.theta))
+            world_dx = x * math.cos(self.theta) - y * math.sin(self.theta)
+            world_dy = x * math.sin(self.theta) + y * math.cos(self.theta)
+            rx = px - world_dy
+            ry = py - world_dx
             c_pts.append([int(rx), int(ry)])
         cockpit_pts = np.array(c_pts, np.int32)
         cv2.fillConvexPoly(img, cockpit_pts, (150, 150, 150))
         cv2.polylines(img, [cockpit_pts], True, (100, 100, 100), 1)
 
         mast_offset = L * 0.15
-        mast_x = int(px + mast_offset * math.cos(self.theta))
-        mast_y = int(py - mast_offset * math.sin(self.theta))
+        world_mast_dx = mast_offset * math.cos(self.theta)
+        world_mast_dy = mast_offset * math.sin(self.theta)
+        mast_x = int(px - world_mast_dy)
+        mast_y = int(py - world_mast_dx)
         cv2.circle(img, (mast_x, mast_y), 3, (40, 40, 40), 2)
 
-        stern_x = int(px - math.cos(self.theta) * (L/2 * 1.05))
-        stern_y = int(py + math.sin(self.theta) * (L/2 * 1.05))
+        stern_offset = -L/2 * 1.05
+        world_stern_dx = stern_offset * math.cos(self.theta)
+        world_stern_dy = stern_offset * math.sin(self.theta)
+        stern_x = int(px - world_stern_dy)
+        stern_y = int(py - world_stern_dx)
+        
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * (1.1 * self.scale))
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * (1.1 * self.scale))
+        rudder_len = 1.1 * self.scale
+        world_rudder_dx = -math.cos(rudder_angle) * rudder_len
+        world_rudder_dy = -math.sin(rudder_angle) * rudder_len
+        rudder_end_x = int(stern_x - world_rudder_dy)
+        rudder_end_y = int(stern_y - world_rudder_dx)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (30, 30, 200), 3)
 
         actual_sail_rad = math.copysign(self.current_sail, self.wind_angle)
         sail_angle_global = self.theta + math.pi + actual_sail_rad
-        sail_end_x = int(mast_x + math.cos(sail_angle_global) * (2.55 * self.scale))
-        sail_end_y = int(mast_y - math.sin(sail_angle_global) * (2.55 * self.scale))
+        sail_len = 2.55 * self.scale
+        world_sail_dx = math.cos(sail_angle_global) * sail_len
+        world_sail_dy = math.sin(sail_angle_global) * sail_len
+        sail_end_x = int(mast_x - world_sail_dy)
+        sail_end_y = int(mast_y - world_sail_dx)
         cv2.line(img, (mast_x, mast_y), (sail_end_x, sail_end_y), (250, 250, 250), 4)
 
         overlay = img.copy()
@@ -252,8 +225,11 @@ class VisualizerNode(Node):
         cv2.putText(img, "TELEMETRY", (20, 35), cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(img, "-" * 30, (20, 50), font, 0.5, (200, 200, 200), 1)
         cv2.putText(img, f"Speed: {self.speed:.2f} m/s", (20, 75), font, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, f"A-Wind: {self.wind_speed:.1f} m/s", (20, 100), font, 0.6, (255, 255, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, f"Rudder: {math.degrees(self.current_rudder):.0f} deg", (20, 125), font, 0.6, (0, 100, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, f"T-Wind: {self.wind_speed:.1f} m/s", (20, 100), font, 0.6, (255, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Ruder (Soll): {math.degrees(self.soll_rudder):.0f} deg", (20, 125), font, 0.5, (255, 150, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Ruder (Ist) : {math.degrees(self.current_rudder):.0f} deg", (20, 145), font, 0.5, (0, 100, 255), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Segel (Soll): {math.degrees(self.soll_sail):.0f} deg", (20, 175), font, 0.5, (255, 150, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, f"Segel (Ist) : {math.degrees(self.current_sail):.0f} deg", (20, 195), font, 0.5, (0, 100, 255), 1, cv2.LINE_AA)
 
         compass_cx, compass_cy = WIDTH - 80, 80
         cv2.circle(img, (compass_cx, compass_cy), 45, (30, 30, 30), -1)
@@ -269,9 +245,10 @@ class VisualizerNode(Node):
                               (int(compass_cx + math.cos(rad) * 40), int(compass_cy + math.sin(rad) * 40)), (100, 100, 100), 1, cv2.LINE_AA)
 
         if hasattr(self, 'wind_sprite') and self.wind_sprite is not None:
+            # -90 offset because 0 radians is now UP (North) instead of RIGHT
             angle_deg = math.degrees(self.debug_true_wind_angle)
             center = (self.wind_sprite.shape[1]//2, self.wind_sprite.shape[0]//2)
-            rot_mat = cv2.getRotationMatrix2D(center, -angle_deg, 1.0)
+            rot_mat = cv2.getRotationMatrix2D(center, -angle_deg - 90, 1.0)
             h, w = self.wind_sprite.shape[:2]
             rotated_wind = cv2.warpAffine(self.wind_sprite, rot_mat, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
             
@@ -288,22 +265,7 @@ class VisualizerNode(Node):
                 for c in range(3):
                     img[y1:y2, x1:x2, c] = (alpha_s * rotated_wind[y1o:y2o, x1o:x2o, c] + alpha_l * img[y1:y2, x1:x2, c])
 
-        def draw_slider(img, text, rect, val, max_val, disp_val, suffix=""):
-            rx, ry, rw, rh = rect
-            cv2.rectangle(img, (rx - 150, ry - 15), (rx + rw + 20, ry + rh + 15), (20, 20, 25), -1)
-            cv2.rectangle(img, (rx - 150, ry - 15), (rx + rw + 20, ry + rh + 15), (80, 80, 80), 1)
-            cv2.rectangle(img, (rx, ry + rh//2 - 2), (rx + rw, ry + rh//2 + 2), (60, 60, 60), -1)
-            k_x = rx + int((val / max_val) * rw)
-            cv2.rectangle(img, (rx, ry + rh//2 - 2), (k_x, ry + rh//2 + 2), (0, 200, 255), -1)
-            cv2.circle(img, (k_x, ry + rh//2), 10, (255, 255, 255), -1, cv2.LINE_AA)
-            cv2.circle(img, (k_x, ry + rh//2), 10, (100, 100, 100), 1, cv2.LINE_AA)
-            label = f"{text}: {disp_val}{suffix}"
-            cv2.putText(img, label, (rx - 130, ry + 12), font, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
-
-        draw_slider(img, "Ruder (Soll)", (550, HEIGHT - 240, 350, 15), self.slider_rudder_val, 90, self.slider_rudder_val - 45, " Grad")
-        draw_slider(img, "Segel (Soll)", (550, HEIGHT - 180, 350, 15), self.slider_sail_val, 70, self.slider_sail_val, " Grad")
-        draw_slider(img, "T-Wind Speed", (550, HEIGHT - 120, 350, 15), self.slider_wspeed_val, 20, self.slider_wspeed_val, " m/s")
-        draw_slider(img, "T-Wind Angle", (550, HEIGHT - 60,  350, 15), self.slider_wangle_val, 360, self.slider_wangle_val, " Grad")
+        # Die alten God-Mode Slider wurden entfernt
 
         cv2.imshow(self.window_name, img)
         key = cv2.waitKey(1)

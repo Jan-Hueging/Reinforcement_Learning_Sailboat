@@ -18,6 +18,7 @@ x-common: &common
     context: ..
     dockerfile: docker/Dockerfile
   image: sailboat_sim:latest
+  network_mode: "host"  ###########################################################
   environment:
     # X11-Display für Pygame-Visualisierung
     - DISPLAY=${DISPLAY:-:0}

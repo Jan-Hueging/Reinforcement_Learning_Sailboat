@@ -11,6 +11,9 @@ class ProgressLoggerCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         # Wird bei jedem einzelnen Zeitschritt aufgerufen
+        # Zeige alle 100 Schritte einen Fortschritt an, damit man sieht, dass es nicht hängt!
+        if self.model.num_timesteps % 100 == 0:
+            print(f"🔄 Schritt {self.model.num_timesteps} abgeschlossen...", end='\r')
         return True
 
     def _on_rollout_end(self) -> None:

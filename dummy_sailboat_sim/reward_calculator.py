@@ -25,8 +25,12 @@ class RewardCalculator:
         effective_vmg = distance_reduction / Config.STEP_TIME_SEC
         r_vmg = effective_vmg * Config.REWARD_VMG_MULTIPLIER
 
-        # Action Jitter Penalty
-        r_jitter = Config.PENALTY_ACTION_JITTER * (abs(float(action[0])) + abs(float(action[1])))
+        # Action Jitter Penalty (Zappeln)
+        # Die Strafe wird nun auf die DIFFERENZ zur letzten Aktion berechnet, da die Aktion absolut ist.
+        prev_action = state_dict.get('prev_action', action)
+        action_delta_rudder = abs(float(action[0]) - float(prev_action[0]))
+        action_delta_sail = abs(float(action[1]) - float(prev_action[1]))
+        r_jitter = Config.PENALTY_ACTION_JITTER * (action_delta_rudder + action_delta_sail)
         
         # Time Penalty
         r_time = Config.REWARD_TIME_PENALTY
@@ -48,8 +52,7 @@ class RewardCalculator:
             r_term = Config.REWARD_SUCCESS 
             reward += r_term
             terminated = True
-        elif pos_x < Config.WORKSPACE_X_MIN or pos_x > Config.WORKSPACE_X_MAX or \
-             pos_y < Config.WORKSPACE_Y_MIN or pos_y > Config.WORKSPACE_Y_MAX:
+        elif current_dist > Config.MAX_DISTANCE_FROM_TARGET:
             r_term = Config.REWARD_FAIL
             reward += r_term
             terminated = True

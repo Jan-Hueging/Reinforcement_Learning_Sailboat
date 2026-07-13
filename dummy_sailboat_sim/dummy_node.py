@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 import math
 
 # Nachrichten-Typen importieren
@@ -10,7 +11,7 @@ from std_srvs.srv import Empty
 
 class DummySailboat(Node):
     def __init__(self):
-        super().__init__('dummy_sailboat_node')
+        super().__init__('dummy_sailboat_node', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, True)])
         
         # ==========================================
         # 1. INTERNE ZUSTÄNDE (Physik-Variablen)
@@ -44,7 +45,6 @@ class DummySailboat(Node):
         # Wind kommt weiterhin vom Debug-Visualizer
         self.sub_true_wind = self.create_subscription(Vector3, '/debug/true_wind', self.true_wind_cb, 10)
 
-
         # ==========================================
         # 3. SCHNITTSTELLEN: OUTPUTS (Publisher)
         # ==========================================
@@ -77,8 +77,8 @@ class DummySailboat(Node):
     def update_physics(self):
 
         # 1. Kinematik
-        # Drehung basierend auf Ruder (jetzt in Grad) und aktueller Fahrt
-        norm_rudder = self.cmd_rudder / 45.0
+        # Drehung basierend auf Ruder (jetzt in rad) und aktueller Fahrt
+        norm_rudder = self.cmd_rudder / Config.MAX_RUDDER_ANGLE_RAD
         turn_rate = -norm_rudder * self.v * Config.DUMMY_RUDDER_EFFECT
         self.theta += turn_rate * self.dt
         
@@ -102,11 +102,11 @@ class DummySailboat(Node):
         aw_angle_relative = (aw_angle_relative + math.pi) % (2 * math.pi) - math.pi
 
         # 3. Antrieb & Effizienz
-        # Die empfangene cmd_sail ist die Schotlänge (0 bis 70 Grad).
+        # Die empfangene cmd_sail ist die Schotlänge (in Radiant).
         # Der echte Baumwinkel schwingt je nach Wind auf die Leeseite.
         # aw_angle_relative ist die Richtung, in die der Wind weht.
         # Das Segel wird in genau diese Richtung gedrückt.
-        sheet_rad = math.radians(self.cmd_sail)
+        sheet_rad = self.cmd_sail
         actual_sail_rad = math.copysign(sheet_rad, aw_angle_relative)
         
         # Cosinus von 0 bedeutet 100% Effizienz
@@ -156,7 +156,7 @@ class DummySailboat(Node):
         self.v = Config.START_V
         self.heel_angle = 0.0
         self.cmd_rudder = 0.0
-        self.cmd_sail = Config.INITIAL_SAIL_ANGLE_DEG
+        self.cmd_sail = Config.INITIAL_SAIL_ANGLE_RAD
         return response
 
 def main(args=None):

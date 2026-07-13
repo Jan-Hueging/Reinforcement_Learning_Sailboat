@@ -17,42 +17,41 @@ class VisualizerNode(Node):
 
         self.x, self.y, self.theta, self.speed = 0.0, 0.0, 0.0, 0.0
         self.wind_speed, self.wind_angle = 0.0, 0.0
-        self.scale = 15.0
-        self.current_rudder = math.radians(Config.INITIAL_RUDDER_ANGLE_DEG)
-        self.current_sail = math.radians(Config.INITIAL_SAIL_ANGLE_DEG)
+        self.current_rudder = Config.INITIAL_RUDDER_ANGLE_RAD
+        self.current_sail = Config.INITIAL_SAIL_ANGLE_RAD
         self.debug_true_wind_speed = 5.0
         self.debug_true_wind_angle = 0.0
 
-        # Publisher fÃ¼r die Steuerung
+        # Publisher für die Steuerung
         self.pub_rudder = self.create_publisher(Float64, Config.TOPIC_RUDDER_SOLL, 10)
         self.pub_sail = self.create_publisher(Float64, Config.TOPIC_SAIL_SOLL, 10)
         self.pub_weather = self.create_publisher(Vector3, '/debug/true_wind', 10)
 
-        # Subscriber fÃ¼r die Sensoren
+        # Subscriber für die Sensoren
         self.create_subscription(Point, Config.TOPIC_GPS, self.gps_cb, 10)
         self.create_subscription(Float64, Config.TOPIC_COMPASS, self.compass_cb, 10)
         self.create_subscription(Float64, Config.TOPIC_WIND_SPEED, self.wind_speed_cb, 10)
         self.create_subscription(Float64, Config.TOPIC_WIND_DIR, self.wind_dir_cb, 10)
 
-        # Einheitliche LÃ¤nge fÃ¼r die Bezeichnungen (fÃ¼r bÃ¼ndige Schieberegler)
+        # Einheitliche Länge für die Bezeichnungen (für bündige Schieberegler)
         self.name_rudder = 'Ruder (-45 bis 45 Grad)'.rjust(30, ' ')
         self.name_sail   = 'Segel (0 bis 70 Grad)'.rjust(30, ' ')
         self.name_wspeed = 'Wind Speed (m/s)'.rjust(30, ' ')
         # Wind Angle ist in der proportionalen Schriftart breiter, daher weniger Leerzeichen:
         self.name_wangle = 'Wind Angle (Deg)'.rjust(28, ' ')
 
-        # Schieberegler fÃ¼r Boot-Steuerung
+        # Schieberegler für Boot-Steuerung
         cv2.createTrackbar(self.name_rudder, self.window_name, 45, 90, self.update_controls)
         cv2.createTrackbar(self.name_sail, self.window_name, 35, 70, self.update_controls)
         
-        # Schieberegler fÃ¼r das Wetter
+        # Schieberegler für das Wetter
         cv2.createTrackbar(self.name_wspeed, self.window_name, 5, 20, self.update_weather)
         cv2.createTrackbar(self.name_wangle, self.window_name, 0, 360, self.update_weather)
 
         self.create_timer(1.0 / 30.0, self.render_loop)
         self.get_logger().info('Radar hochgefahren! Fenster sollte offen sein.')
 
-        # Speicher fÃ¼r das dynamische Ziel
+        # Speicher für das dynamische Ziel
         self.target_x = 0.0
         self.target_y = 0.0
 
@@ -74,6 +73,12 @@ class VisualizerNode(Node):
     def wind_dir_cb(self, msg):
         self.wind_angle = msg.data
 
+    def cmd_rudder_cb(self, msg):
+        self.current_rudder = msg.data
+
+    def cmd_sail_cb(self, msg):
+        self.current_sail = msg.data
+
     def update_controls(self, _):
         # Regler auslesen
         val_rudder = cv2.getTrackbarPos(self.name_rudder, self.window_name)
@@ -83,13 +88,13 @@ class VisualizerNode(Node):
         rudder_deg = val_rudder - 45.0
         sail_deg = float(val_sail)
         
-        # FÃ¼r interne Anzeige (Linien zeichnen)
+        # Interne Speicherung bleibt in Radiant für die Zeichnung, 
+        # aber publishen tun wir jetzt auch Radiant
         self.current_rudder = math.radians(rudder_deg)
         self.current_sail = math.radians(sail_deg)
-        
-        # Publisher senden jetzt direkt die Grad-Werte!
-        self.pub_rudder.publish(Float64(data=rudder_deg))
-        self.pub_sail.publish(Float64(data=sail_deg))
+
+        self.pub_rudder.publish(Float64(data=self.current_rudder))
+        self.pub_sail.publish(Float64(data=self.current_sail))
 
     def update_weather(self, _):
         # Wetter-Regler auslesen
@@ -119,12 +124,10 @@ class VisualizerNode(Node):
         
         # Umrechnung Boot-Position
         self.scale = 20.0
-        px = int(cx + self.x * self.scale) % WIDTH
-        py = int(cy - self.y * self.scale) % HEIGHT
-
-        # Dynamischer Zielpunkt
-        t_px = int(cx + self.target_x * self.scale) % WIDTH
-        t_py = int(cy - self.target_y * self.scale) % HEIGHT
+        px = int(cx - self.y * self.scale) % WIDTH
+        py = int(cy - self.x * self.scale) % HEIGHT
+        t_px = int(cx - self.target_y * self.scale) % WIDTH
+        t_py = int(cy - self.target_x * self.scale) % HEIGHT
         
         # Ziel-Marker (Bojen-Look)
         cv2.circle(img, (t_px, t_py), 12, (0, 165, 255), -1) # Orange
@@ -136,10 +139,10 @@ class VisualizerNode(Node):
         hull_length = 30
         hull_width = 12
         boat_pts = np.array([
-            [px + math.cos(self.theta) * hull_length, py - math.sin(self.theta) * hull_length], # Nase
-            [px + math.cos(self.theta - 2.5) * hull_width, py - math.sin(self.theta - 2.5) * hull_width], # Heck rechts
-            [px - math.cos(self.theta) * (hull_length*0.2), py + math.sin(self.theta) * (hull_length*0.2)], # Heck mitte
-            [px + math.cos(self.theta + 2.5) * hull_width, py - math.sin(self.theta + 2.5) * hull_width], # Heck links
+            [px - math.sin(self.theta) * hull_length, py - math.cos(self.theta) * hull_length], # Nase
+            [px - math.sin(self.theta - 2.5) * hull_width, py - math.cos(self.theta - 2.5) * hull_width], # Heck rechts
+            [px + math.sin(self.theta) * (hull_length*0.2), py + math.cos(self.theta) * (hull_length*0.2)], # Heck mitte
+            [px - math.sin(self.theta + 2.5) * hull_width, py - math.cos(self.theta + 2.5) * hull_width], # Heck links
         ], np.int32)
         cv2.fillConvexPoly(img, boat_pts, (200, 200, 200))
         cv2.polylines(img, [boat_pts], True, (255, 255, 255), 2)
@@ -148,19 +151,19 @@ class VisualizerNode(Node):
         # (Wird nicht mehr gezeichnet, da er am Boot stÃ¶rt)
 
         # Ruder
-        stern_x = int(px - math.cos(self.theta) * (hull_length*0.2))
-        stern_y = int(py + math.sin(self.theta) * (hull_length*0.2))
+        stern_x = int(px + math.sin(self.theta) * (hull_length*0.2))
+        stern_y = int(py + math.cos(self.theta) * (hull_length*0.2))
         rudder_angle = self.theta + self.current_rudder
-        rudder_end_x = int(stern_x - math.cos(rudder_angle) * 15)
-        rudder_end_y = int(stern_y + math.sin(rudder_angle) * 15)
+        rudder_end_x = int(stern_x + math.sin(rudder_angle) * 15)
+        rudder_end_y = int(stern_y + math.cos(rudder_angle) * 15)
         cv2.line(img, (stern_x, stern_y), (rudder_end_x, rudder_end_y), (0, 0, 255), 3)
 
-        # Segel (WeiÃŸ) - schwingt auf die Leeseite
+        # Segel (Weiß) - schwingt auf die Leeseite
         # 0 = mittig hinten, + = Backbord, - = Steuerbord
         actual_sail_rad = math.copysign(self.current_sail, self.wind_angle)
         sail_angle_global = self.theta + math.pi + actual_sail_rad
-        sail_end_x = int(px + math.cos(sail_angle_global) * 25)
-        sail_end_y = int(py - math.sin(sail_angle_global) * 25) # - weil in OpenCV Y nach unten geht
+        sail_end_x = int(px - math.sin(sail_angle_global) * 25)
+        sail_end_y = int(py - math.cos(sail_angle_global) * 25)
         cv2.line(img, (px, py), (sail_end_x, sail_end_y), (255, 255, 255), 4)
 
         # HUD / Telemetrie (halbtransparenter Hintergrund)

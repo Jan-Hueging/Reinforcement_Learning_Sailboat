@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Point, Vector3
 import math
@@ -27,7 +28,7 @@ class SailboatEnv(gym.Env):
         # 3. ROS2 Setup
         if not rclpy.ok():
             rclpy.init()
-        self.node = Node('sailboat_gym_interface')
+        self.node = Node('sailboat_gym_interface', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, True)])
 
         self.pub_rudder = self.node.create_publisher(Float64, Config.TOPIC_RUDDER_SOLL, 10)
         self.pub_sail = self.node.create_publisher(Float64, Config.TOPIC_SAIL_SOLL, 10)
@@ -55,17 +56,18 @@ class SailboatEnv(gym.Env):
         # Für Geschwindigkeitsberechnung aus GPS
         self.prev_gps = None
         self.prev_compass = 0.0
-        self.prev_time = time.time()
+        self.prev_time = self.node.get_clock().now().nanoseconds / 1e9
 
         self.pub_target = self.node.create_publisher(Vector3, '/navigation/target', 10)
         
-        # Fester Zielpunkt
-        self.target_pos = np.array([40.0, 30.0])
+        # Generiere ein zufälliges Ziel (relativ zum Start)
+        radius = float(np.random.uniform(Config.TARGET_SPAWN_RADIUS[0], Config.TARGET_SPAWN_RADIUS[1]))
+        angle = float(np.random.uniform(-math.pi, math.pi))
+        self.target_pos = np.array([radius * math.cos(angle), radius * math.sin(angle)])
         
         self.prev_dist = 0.0
         self.current_step = 0
-
-        self.reset_client = self.node.create_client(Empty, '/reset_simulation')
+        self.prev_action = np.array([0.0, 0.0])
         
         self.max_steps = Config.MAX_EPISODE_STEPS 
 
@@ -109,7 +111,7 @@ class SailboatEnv(gym.Env):
         rel_angle_to_target = (rel_angle_to_target + math.pi) % (2 * math.pi) - math.pi
 
         # 2. Geschwindigkeit aus GPS/Kompass-Historie berechnen
-        current_time = time.time()
+        current_time = self.node.get_clock().now().nanoseconds / 1e9
         dt = current_time - self.prev_time
         v_linear = 0.0
         v_angular = 0.0
@@ -135,9 +137,9 @@ class SailboatEnv(gym.Env):
         obs_dist = np.clip(dist_to_target / 100.0, 0.0, 1.0) # 0 bis 1
         obs_angle = rel_angle_to_target / math.pi            # -1 bis 1
         obs_heel = np.clip(self.current_heel / (math.pi/4), -1.0, 1.0)
-        # Ist-Werte in Grad auf -1 bis 1 normieren
-        obs_rudder = np.clip(self.current_rudder_ist / Config.MAX_RUDDER_ANGLE_DEG, -1.0, 1.0)
-        obs_sail = np.clip((self.current_sail_ist / (Config.MAX_SAIL_ANGLE_DEG / 2.0)) - 1.0, -1.0, 1.0)
+        # Ist-Werte auf -1 bis 1 normieren
+        obs_rudder = np.clip(self.current_rudder_ist / Config.MAX_RUDDER_ANGLE_RAD, -1.0, 1.0)
+        obs_sail = np.clip((self.current_sail_ist / (Config.MAX_SAIL_ANGLE_RAD / 2.0)) - 1.0, -1.0, 1.0)
         obs_wind_s = np.clip(self.current_wind_speed / 15.0, 0.0, 1.0)
         obs_wind_a = self.current_wind_dir / math.pi
         obs_v_lin = np.clip(v_linear / 5.0, 0.0, 1.0)
@@ -147,28 +149,32 @@ class SailboatEnv(gym.Env):
 
     def step(self, action):
 
-        # action[0 & 1] sind die gewünschten Änderungen (-1 bis 1)
-        rudder_delta = action[0] * Config.MAX_RUDDER_DELTA_NORM
-        sail_delta = action[1] * Config.MAX_SAIL_DELTA_NORM
+        # action[0 & 1] sind nun ABSOLUTE SOLL-WERTE (-1 bis 1)
+        self.current_rudder_norm = float(np.clip(action[0], -1.0, 1.0))
+        self.current_sail_norm = float(np.clip(action[1], -1.0, 1.0))
 
-        # Delta auf IST addieren
-        self.current_rudder_norm += rudder_delta
-        self.current_sail_norm += sail_delta
-
-        # Segel & Ruder begrenzen
-        self.current_rudder_norm = np.clip(self.current_rudder_norm, -1.0, 1.0)
-        self.current_sail_norm = np.clip(self.current_sail_norm, -1.0, 1.0)
-
-        # Umrechnen in Grad für die Topics
-        pub_rudder_deg = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_DEG)
-        pub_sail_deg = float(((self.current_sail_norm + 1.0) / 2.0) * Config.MAX_SAIL_ANGLE_DEG)
+        # Umrechnen in Radiant für die Topics
+        pub_rudder_rad = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_RAD)
+        
+        # Segel von [-1, 1] auf [MIN_SAIL_ANGLE, MAX_SAIL_ANGLE] interpolieren
+        sail_range = Config.MAX_SAIL_ANGLE_RAD - Config.MIN_SAIL_ANGLE_RAD
+        pub_sail_rad = float(Config.MIN_SAIL_ANGLE_RAD + ((self.current_sail_norm + 1.0) / 2.0) * sail_range)
 
         # Senden (neuen) Werte
-        self.pub_rudder.publish(Float64(data=pub_rudder_deg))
-        self.pub_sail.publish(Float64(data=pub_sail_deg))
+        self.pub_rudder.publish(Float64(data=pub_rudder_rad))
+        self.pub_sail.publish(Float64(data=pub_sail_rad))
 
-        # Warten auf Physik
-        rclpy.spin_once(self.node, timeout_sec=Config.STEP_TIME_SEC)
+        # Warten, bis die Simulation (Gazebo) wirklich die Zeit STEP_TIME_SEC simuliert hat.
+        # Da wir use_sim_time=True nutzen, ist dies die simulierte Zeit.
+        start_time = self.node.get_clock().now()
+        import rclpy.duration
+        target_time = start_time + rclpy.duration.Duration(seconds=Config.STEP_TIME_SEC)
+        
+        while rclpy.ok():
+            current_time = self.node.get_clock().now()
+            if current_time >= target_time:
+                break
+            rclpy.spin_once(self.node, timeout_sec=0.01)
         
         # Observation & Reward
         obs = self._get_obs()
@@ -190,10 +196,12 @@ class SailboatEnv(gym.Env):
             'prev_dist': self.prev_dist,
             'v_linear': self.current_v_linear,
             'angle_to_target': self.current_rel_angle,
-            'heel_angle': self.current_heel
+            'heel_angle': self.current_heel,
+            'prev_action': self.prev_action
         }
         reward, terminated = self.reward_calculator.calculate(state_dict, action)
         self.prev_dist = current_dist
+        self.prev_action = np.copy(action)
 
         self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
 
@@ -208,32 +216,48 @@ class SailboatEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
 
-        while not self.reset_client.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info('Warte auf Reset-Service...')
+        # 1. Bestimme die aktuelle Position des Bootes
+        if self.current_gps is not None:
+            boat_x = self.current_gps.x
+            boat_y = self.current_gps.y
+        else:
+            boat_x = 0.0
+            boat_y = 0.0
+
+        # 2. Generiere ein neues zufälliges Ziel RELATIV zur aktuellen Bootsposition (360 Grad im Umkreis)
+        radius = float(np.random.uniform(Config.TARGET_SPAWN_RADIUS[0], Config.TARGET_SPAWN_RADIUS[1]))
+        angle = float(np.random.uniform(-math.pi, math.pi))
+        self.target_pos = np.array([boat_x + radius * math.cos(angle), boat_y + radius * math.sin(angle)])
+        
+        # Teile dem Visualizer schon jetzt das Ziel mit
+        self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
+        rclpy.spin_once(self.node, timeout_sec=0.1)
     
-        # Boot zurücksetzen
-        self.reset_client.call_async(Empty.Request())
+        # (Es gibt KEINEN Aufruf von /reset_simulation mehr! Boot segelt einfach weiter)
 
         super().reset(seed=seed)
         self.current_step = 0 
+        self.prev_time = self.node.get_clock().now().nanoseconds / 1e9
         
         self.current_rudder_norm = 0.0
         self.current_sail_norm = 0.0
+        self.prev_action = np.array([0.0, 0.0])
         
-        pub_rudder_deg = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_DEG)
-        pub_sail_deg = float(((self.current_sail_norm + 1.0) / 2.0) * Config.MAX_SAIL_ANGLE_DEG)
+        pub_rudder_rad = float(self.current_rudder_norm * Config.MAX_RUDDER_ANGLE_RAD)
+        sail_range = Config.MAX_SAIL_ANGLE_RAD - Config.MIN_SAIL_ANGLE_RAD
+        pub_sail_rad = float(Config.MIN_SAIL_ANGLE_RAD + ((self.current_sail_norm + 1.0) / 2.0) * sail_range)
         
-        self.pub_rudder.publish(Float64(data=pub_rudder_deg))
-        self.pub_sail.publish(Float64(data=pub_sail_deg))
+        self.pub_rudder.publish(Float64(data=pub_rudder_rad))
+        self.pub_sail.publish(Float64(data=pub_sail_rad))
         
-        for _ in range(5):
-            rclpy.spin_once(self.node, timeout_sec=0.1)
+        # Kurz warten, damit die Simulation die Nachrichten verarbeitet
+        start_time = self.node.get_clock().now()
+        target_time = start_time + rclpy.duration.Duration(seconds=0.5)
+        while rclpy.ok():
+            if self.node.get_clock().now() >= target_time:
+                break
+            rclpy.spin_once(self.node, timeout_sec=0.01)
 
-        rand_x = np.random.uniform(Config.TARGET_SPAWN_X[0], Config.TARGET_SPAWN_X[1])
-        rand_y = np.random.uniform(Config.TARGET_SPAWN_Y[0], Config.TARGET_SPAWN_Y[1])
-        self.target_pos = np.array([rand_x, rand_y])
-        
-        # Visualizer mitteilen, wo neues Ziel ist
         self.pub_target.publish(Vector3(x=float(self.target_pos[0]), y=float(self.target_pos[1]), z=0.0))
 
         if self.current_gps is not None:

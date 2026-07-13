@@ -8,10 +8,9 @@ class Config:
     # ==========================================
 
     # ⚠️ nicht innerhalb eines Trainings verändern!
-    MAX_RUDDER_ANGLE_DEG = 45.0     # [Grad]    Max. Ruderwinkel
-    MAX_SAIL_ANGLE_DEG = 70.0       # [Grad]    Max. Segelwinkel
-    MAX_RUDDER_DELTA_NORM = 0.05    # [/]       Normiertes Ruderdelta pro Step (-1 bis 1)
-    MAX_SAIL_DELTA_NORM = 0.05      # [/]       Normiertes Segeldelta pro Step (-1 bis 1)
+    MAX_RUDDER_ANGLE_RAD = 45.0 * math.pi / 180.0   # [rad]    Maximaler Ruderwinkel
+    MIN_SAIL_ANGLE_RAD = 18.0 * math.pi / 180.0     # [rad]    Min. Segelwinkel (Dichtgeholt)
+    MAX_SAIL_ANGLE_RAD = 70.0 * math.pi / 180.0     # [rad]    Max. Segelwinkel (Offen)
     
     DUMMY_RUDDER_EFFECT = 0.5       # [/]       Rudereffekt
     DUMMY_SAIL_EFFICIENCY = 0.3     # [0-1]     Max. Segeleffizienz
@@ -19,13 +18,13 @@ class Config:
     DUMMY_HEEL_STIFFNESS = 0.1      # [rad*s/m] Krängungsfaktor
 
     TARGET_REWARD_RADIUS = 5.0      # [Meter]   Größe des Ziels
-    WORKSPACE_X_MIN = -100.0        # [Meter]   Linke Grenze des Arbeitsfeldes
-    WORKSPACE_X_MAX = 100.0         # [Meter]   Rechte Grenze des Arbeitsfeldes
-    WORKSPACE_Y_MIN = -100.0        # [Meter]   Untere Grenze des Arbeitsfeldes
-    WORKSPACE_Y_MAX = 100.0         # [Meter]   Obere Grenze des Arbeitsfeldes
+    MAX_DISTANCE_FROM_TARGET = 150.0 # [Meter]  Abbruch-Distanz bei Verfehlen des Ziels
+    WORKSPACE_X_MIN = -1000000.0    # [Meter]   Linke Grenze des Arbeitsfeldes
+    WORKSPACE_X_MAX = 1000000.0     # [Meter]   Rechte Grenze des Arbeitsfeldes
+    WORKSPACE_Y_MIN = -1000000.0    # [Meter]   Untere Grenze des Arbeitsfeldes
+    WORKSPACE_Y_MAX = 1000000.0     # [Meter]   Obere Grenze des Arbeitsfeldes
     
-    TARGET_SPAWN_X = (10.0, 80.0)   # [Meter]   Zielbereich X (gesamte Sichtfläche vor dem Boot)
-    TARGET_SPAWN_Y = (-30.0, 30.0)  # [Meter]   Zielbereich Y (gesamte Sichtfläche)
+    TARGET_SPAWN_RADIUS = (20.0, 100.0) # [Meter]   Ziel-Spawndistanz (min, max) ringförmig um das Boot herum
 
     WIND_SPEED_DEFAULT = 5.0        # [m/s]     konst. Windgeschwindigkeit
     WIND_ANGLE_DEFAULT = 0.0        # [rad]     konst. Windrichtung (Rückenwind)
@@ -38,8 +37,8 @@ class Config:
     START_Y = 0.0                   # [Meter]   Startposition Y
     START_THETA = 0.0               # [rad]     Startausrichtung
     START_V = 0.0                   # [m/s]     Startgeschwindigkeit
-    INITIAL_RUDDER_ANGLE_DEG = 0.0  # [Grad]    Start-Ruderwinkel
-    INITIAL_SAIL_ANGLE_DEG = 35.0   # [Grad]    Start-Segelwinkel
+    INITIAL_RUDDER_ANGLE_RAD = 0.0                      # [rad]    Start-Ruderwinkel
+    INITIAL_SAIL_ANGLE_RAD = 35.0 * math.pi / 180.0     # [rad]    Start-Segelwinkel
 
 
     # ===============================================
@@ -55,8 +54,8 @@ class Config:
     # ⏱️ 4. Taktung
     # ==========================================
 
-    STEP_TIME_SEC = 0.025           # [Sekunde] Schrittgeschwindigkeit   
-    MAX_EPISODE_STEPS = 3072        # [Steps]   Abbruchspunkt 
+    STEP_TIME_SEC = 0.2             # [Sekunde] Schrittgeschwindigkeit (5 Hz)
+    MAX_EPISODE_STEPS = 750         # [Steps]   Abbruchspunkt (750 * 0.2 = 150 Sekunden)
     
 
     # ===============================================
@@ -87,8 +86,8 @@ class Config:
     TOPIC_COMPASS = '/Kompass'
     TOPIC_HEEL = '/Neigung'
     TOPIC_RUDDER_IST = '/Ruderstellung_Ist'
-    TOPIC_RUDDER_SOLL = '/Ruderstellung_Soll_Autonom'
+    TOPIC_RUDDER_SOLL = '/Ruderstellung_Soll'
     TOPIC_SAIL_IST = '/Segelstellung_Ist'
-    TOPIC_SAIL_SOLL = '/Segelstellung_Soll_Autonom'
+    TOPIC_SAIL_SOLL = '/Segelstellung_Soll'
     TOPIC_WIND_SPEED = '/Windgeschwindigkeit'
     TOPIC_WIND_DIR = '/Windrichtung'
