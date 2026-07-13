@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!-- Includes all macros in this package so they don't need to be included individualy -->
+<robot xmlns:xacro="http://ros.org/wiki/xacro"
+       name="opti">
+    
+      <!-- =================================================================== -->
+  <!-- SENSOREN FÜR DIE KI (NATIVE GAZEBO HARMONIC SYNTAX)                 -->
+  <!-- =================================================================== -->
+
+  <!-- 1a. IMU (Liefert Quaternionen -> Krängungswinkel und Kompasskurs) -->
+  <gazebo reference="base_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>50.0</update_rate> <!-- 50 Hz sind perfekt für ein KI-Training -->
+      <topic>imu/data</topic>
+      <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu">
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- 1b. GPS (NavSat - Liefert globale XY-Koordinaten) -->
+  <gazebo reference="base_link">
+    <sensor name="gps_sensor" type="navsat">
+      <always_on>true</always_on>
+      <update_rate>10.0</update_rate> <!-- GPS läuft in der Realität meist mit 10 Hz -->
+      <topic>/GPS</topic>
+      <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat">
+      </plugin>
+    </sensor>
+  </gazebo>
+
+    <!-- 1c. Windmesser (Anemometer - Liefert scheinbare Winddaten als Vektor) -->
+  <gazebo reference="base_link">
+    <sensor name="anemometer" type="air_speed">
+      <always_on>true</always_on>
+      <update_rate>10.0</update_rate>
+      <!-- POSITIONIERUNG: X=leicht vorne, Y=mittig, Z=Spitze des Mastes -->
+      <!-- Falls du keine Variablen nutzt, trage feste Zahlen ein (z.B. 0.3 0.0 2.5) -->
+      <pose>1.3 0.0 1.0 0 0 0</pose>
+      <topic>wind_measurement</topic>
+      <plugin filename="gz-sim-air-speed-system" name="gz::sim::systems::AirSpeed">
+      </plugin>
+    </sensor>
+  </gazebo>
+
+
+</robot>

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Hydrodynamik-Makros laden -->
+  <xacro:include filename="$(find opti_gazebo)/urdf/dynamics/opti_gazebo_dynamics_plugin.xacro"/>
+
+  <!-- Basisgeometrie laden -->
+  <xacro:include filename="$(find opti_description)/urdf/optimist_complete.urdf.xacro"/>
+
+  <!-- Sensoren -->
+  <xacro:include filename="$(find opti_gazebo)/urdf/macros.xacro"/>
+
+  <!-- Hydrodynamik-Plugin anhängen -->
+  <xacro:opti_dynamics_gazebo name="opti_dynamics_plugin"/>
+
+</robot>

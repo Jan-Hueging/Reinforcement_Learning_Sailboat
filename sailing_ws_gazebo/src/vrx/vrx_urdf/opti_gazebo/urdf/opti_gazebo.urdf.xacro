@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="opti">
+
+  <!-- === Gazebo-Struktur (Joints, Frames, ggf. Sensoren) === -->
+  <xacro:include filename="$(find opti_gazebo)/urdf/opti_gazebo.xacro"/>
+
+  <!-- === ROS Integration (PosePublisher + JointStatePublisher) === -->
+  <gazebo>
+    <plugin filename="libgz-sim-pose-publisher-system.so"
+            name="gz::sim::systems::PosePublisher">
+      <publish_link_pose>false</publish_link_pose>
+      <publish_sensor_pose>true</publish_sensor_pose>
+      <publish_collision_pose>false</publish_collision_pose>
+      <publish_visual_pose>false</publish_visual_pose>
+      <publish_nested_model_pose>false</publish_nested_model_pose>
+      <publish_model_pose>true</publish_model_pose>
+      <use_pose_vector_msg>true</use_pose_vector_msg>
+      <static_publisher>false</static_publisher>
+      <static_update_frequency>1</static_update_frequency>
+    </plugin>
+
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher"/>
+  </gazebo>
+
+
+  <gazebo reference="sail_joint">
+    <sensor name="my_ft_sensor" type="force_torque">
+      <always_on>true</always_on>
+      <update_rate>100.0</update_rate>
+      <visualize>true</visualize>
+      <!-- Das native Gazebo-Topic, auf dem der Sensor sendet -->
+      <topic>/model/mein_roboter/joint/wrist_joint/ft_sensor</topic>
+      <force_torque>
+        <frame>parent</frame>
+        <measure_direction>child_to_parent</measure_direction>
+      </force_torque>
+    </sensor>
+  </gazebo>
+
+  <gazebo>
+  <!-- 7a. RUDER-STEUERUNG (Natives Gazebo System ohne .so) -->
+  <plugin filename="gz-sim-joint-position-controller-system" name="gz::sim::systems::JointPositionController">
+      <joint_name>rudder_joint</joint_name>
+      <topic>/Ruderstellung_Soll</topic>
+      <p_gain>100.0</p_gain>
+      <i_gain>1.0</i_gain>
+      <d_gain>5.0</d_gain>
+    </plugin>
+
+    <!-- 7b. SEGEL-STEUERUNG (SCHOT): Dein gecachtes Custom-Plugin -->
+    <!-- Da es dein eigenes C++ Plugin aus 'sailing_plugins' ist, behalten wir die exakte Schreibweise bei -->
+    
+    <plugin filename="libSailLimitPlugin.so" name="gz::sim::systems::SailLimitPlugin">
+      <joint_name>sail_joint</joint_name>
+      <topic>/Segelstellung_Soll</topic>
+      <max_rate>0.3</max_rate>
+    </plugin>
+    
+  </gazebo>
+  
+  <gazebo>
+    <plugin filename="gz-sim-odometry-publisher-system" name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <!-- Das Topic, auf dem Gazebo die Odometrie publiziert -->
+      <odom_topic>/model/opti_boot/odometry</odom_topic>
+      <dimensions>3</dimensions>
+    </plugin>
+  </gazebo>
+
+
+</robot>

@@ -1,0 +1,164 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="opti_dynamics_gazebo" params="name">
+
+    <gazebo>
+
+      <!-- ========================= -->
+      <!-- 1) Auftrieb + Wellen      -->
+      <!-- ========================= -->
+      <plugin filename="libSurface.so" name="vrx::Surface">
+        <link_name>base_link</link_name>
+        <hull_length>2.3</hull_length>
+        <hull_radius>${0.98/2}</hull_radius>
+        <fluid_level>0</fluid_level>
+
+        <points>
+          <point> 1.30942  0.485 0</point>
+          <point>-0.98778  0.490 0</point>
+          <point> 1.30942 -0.485 0</point>
+          <point>-0.98778 -0.490 0</point>
+        </points>
+
+        <wavefield>
+          <topic>/vrx/wavefield/parameters</topic>
+        </wavefield>
+      </plugin>
+
+      <!-- ========================= -->
+      <!-- 2) Rumpf-Hydrodynamik     -->
+      <!-- ========================= -->
+      <plugin filename="libSimpleHydrodynamics.so" name="vrx::SimpleHydrodynamics">
+        <link_name>base_link</link_name>
+
+        <!-- Added Mass (klein für Opti) -->
+        <xDotU>5.0</xDotU>
+        <yDotV>15.0</yDotV>
+        <nDotR>10.0</nDotR>
+
+        <!-- Linear Drag -->
+        <xU>2.0</xU>
+        <yV>40.0</yV>
+        <zW>80.0</zW>
+
+        <nR>10.0</nR>
+
+        <!-- Quadratic Drag -->
+        <xUU>50.0</xUU>
+        <yVV>250.0</yVV>
+        <kPP>65.0</kPP>
+        <mQQ>120.0</mQQ>
+        <nRR>40.0</nRR>
+      </plugin>
+
+      <!-- ========================================================== -->
+      <!-- VRX POLYHEDRA DRAG: VOLUMEN- UND AUFTRIEBSKRAFT AM KIEL     -->
+      <!-- ========================================================== -->
+      <plugin filename="libPolyhedraBuoyancyDrag.so" name="vrx::PolyhedraBuoyancyDrag">
+        <fluid_density>1000.0</fluid_density>
+        <fluid_level>0.0</fluid_level>
+
+        <!-- Laut Doku: Einzelne, skalare Koeffizienten für die Grundreibung -->
+        <linear_drag>1.5</linear_drag>
+        <angular_drag>2.0</angular_drag>
+
+        <buoyancy>
+          <!-- Gekoppelt an den base_link wegen des Link-Lumpings -->
+          <link_name>base_link</link_name>
+          
+          <!-- Hebelarm: Setzt das physikalische Zentrum unter den Rumpf (6 Werte: X Y Z R P Y) -->
+          <pose>0.0 0.0 -${-boot_hoehe/2 + kiel_tiefe/2} 0.0 0.0 0.0</pose>
+          
+          <!-- Das exakte geometrische Volumen deines Kiels -->
+          <geometry>
+            <box>
+              <size>0.3 0.02 ${kiel_tiefe}</size>
+            </box>
+          </geometry>
+        </buoyancy>
+      </plugin>
+
+
+      
+      <!-- ========================================================== -->
+      <!-- HYDRODYNAMISCHE LENKUNG: DAS RUDER-PLUGIN                  -->
+      <!-- ========================================================== -->
+      <plugin filename="libgz-sim8-lift-drag-system.so" name="gz::sim::systems::LiftDrag">
+        <!-- Verknüpfung mit deinem physischen Ruder-Körper -->
+        <link_name>rudder_link</link_name>
+        
+        <!-- WICHTIG: Dichte von Wasser (1000 kg/m³) für massive Steuerkräfte -->
+        <air_density>1000.0</air_density> 
+        <area>0.08</area> <!-- Reale Fläche des Opti-Ruderblatts in m² -->
+        
+        <!-- Symmetrisches, hocheffizientes Profil (NACA 0012) -->
+        <a0>0.0</a0> <!-- Erzeugt bei 0° Einschlag absolut keinen Seitendruck -->
+        <cla>6.0</cla> <!-- Steiler Auftriebsanstieg für direktes Ansprechen -->
+        <cda>0.04</cda> <!-- Minimaler Reibungswiderstand bei Geradeausfahrt -->
+        
+        <!-- Stall-Verhalten (Strömungsabriss bei zu starkem Einschlag > 20°) -->
+        <alpha_stall>0.5</alpha_stall>
+        <cla_stall>-1.0</cla_stall>
+        <cda_stall>1.5</cda_stall> <!-- Bremst das Boot stark ab, wenn voll eingeschlagen wird -->
+        
+        <!-- Kraftangriffspunkt (Mitte des Ruderblatts im Wasser) -->
+        <!-- X=-0.1 (hinter dem Scharnier), Y=0.0 (mittig), Z=-0.25 (tief im Wasser) -->
+        <cp>-0.25 0.0 -0.25</cp>
+        
+        <!-- Richtungs-Vektoren im lokalen Link-Frame des Ruders -->
+        <forward>1 0 0</forward>  <!-- Profilnase zeigt in Fahrtrichtung vorwärts -->
+        <upward>0 1 0</upward>   <!-- Die erzeugte Steuerkraft wirkt quer zur Fahrtrichtung -->
+      </plugin>
+
+    
+
+    
+      <!-- ========================================================== -->
+      <!-- VRX AERODYNAMIK: DIREKTER WINDANGRIFF AUF DAS SEGEL        -->
+      <!-- ========================================================== -->
+      <plugin filename="libSailingLiftDrag.so"
+        name="gz::sim::systems::SailingLiftDrag">
+
+        <!-- Segel-Link -->
+        <link_name>sail_link</link_name>
+
+        <!-- Fluidparameter -->
+        <air_density>1.225</air_density> <!-- Standard Luftdichte -->
+
+        <!-- Segelfläche -->
+        <area>${segel_flaeche}</area> <!-- m², Opti-Segel ca. 3.5 m² -->
+
+        <!-- Aerodynamik -->
+        <a0>0.0</a0>
+        <cla>5.0</cla> <!-- Lift-Slope vor Stall -->
+        <cda>0.04</cda> <!-- Drag-Slope vor Stall -->
+
+        <!-- Stall-Verhalten -->
+        <alpha_stall>0.35</alpha_stall> <!-- Rad -->
+        <cla_stall>-1.0</cla_stall>
+        <cda_stall>0.4</cda_stall>
+
+        <!-- Kraftangriffspunkt -->
+        <cp>-0.55 0 1.31</cp> <!-- Mitte des Segels -->
+
+        <!-- Orientierung des Segels -->
+        <forward>1 0 0</forward> <!-- Richtung der Segelprofil-Tiefe -->
+        <upward>0 -1 0</upward> <!-- Richtung des Lifts -->
+
+        <!-- Windvektor (WICHTIG!) -->
+        <!--
+        <wind_velocity>0.0 -10.0 0.0</wind_velocity>
+        -->
+
+        <!-- Topic für den Wind -->
+        <wind_topic>/wind</wind_topic>
+
+      </plugin>
+
+
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

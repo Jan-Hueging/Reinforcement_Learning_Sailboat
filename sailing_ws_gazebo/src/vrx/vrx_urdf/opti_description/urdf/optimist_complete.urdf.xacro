@@ -1,0 +1,204 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org" name="opti">
+
+  <material name="default_gray">
+    <color rgba="0.8 0.8 0.8 1"/>
+  </material>
+
+  <material name="white">
+    <color rgba="1 1 1 1"/>
+  </material>
+
+  <!-- =================================================================== -->
+  <!-- 1. Variablen (Xacro Properties) definieren                         -->
+  <!-- =================================================================== -->
+  <!-- Rumpf-Maße (Originalwerte) -->
+  <xacro:property name="boot_masse"   value="35.0" />   <!-- in kg -->
+  <xacro:property name="boot_laenge"  value="2.3" />    <!-- in Metern -->
+  <xacro:property name="boot_breite"  value="1.13" />   <!-- in Metern -->
+  <xacro:property name="boot_hoehe"   value="0.4" />    <!-- in Metern -->
+
+  <!-- Komponenten-Variablen -->
+  <xacro:property name="kiel_masse"   value="2.5" />   <!-- Ballastgewicht gegen Umkippen -->
+  <xacro:property name="kiel_tiefe"   value="0.8" />    <!-- Wie tief reicht der Kiel unter das Boot -->
+
+  <xacro:property name="segel_masse"  value="3.0" />    <!-- Gewicht von Mast + Segel -->
+  <xacro:property name="segel_hoehe"  value="2.35" />   <!-- Höhe des Segels -->
+  <xacro:property name="segel_flaeche" value="3.5" />   <!-- Segelfläche in m² -->
+
+  <xacro:property name="ruder_masse"  value="2.0" />
+  <xacro:property name="ruder_hoehe"  value="0.5" />
+
+  <!-- =================================================================== -->
+  <!-- 2. Der Hauptrumpf (Base Link)                                      -->
+  <!-- =================================================================== -->
+  <link name="base_link">
+    <!-- Visuelle Darstellung im Simulator -->
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/boat.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+      <material name="default_gray"/>
+    </visual>
+
+    <!-- Kollisionsmodell: Nutzt exakt dieselbe Geometrie -->
+    <collision>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://opti_description/share/opti_description/meshes/boat.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+
+    <!-- Trägheitseigenschaften -->
+    <inertial>
+      <!-- Tipp: Den Schwerpunkt (origin) bei einem echten Rumpf leicht nach hinten/unten verschieben -->
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <mass value="${boot_masse}"/>
+      <inertia 
+        ixx="${1/12 * boot_masse * (boot_breite * boot_breite+boot_hoehe * boot_hoehe)}" ixy="0.0" ixz="0.0"
+        iyy="${1/12 * boot_masse * (boot_laenge * boot_laenge+boot_hoehe * boot_hoehe)}" iyz="0.0"
+        izz="${1/12 * boot_masse * (boot_breite * boot_breite+boot_laenge * boot_laenge)}" />
+    </inertial>
+  </link>
+
+
+  <!-- =================================================================== -->
+  <!-- 3. Der Kiel (Keel)                                                 -->
+  <!-- =================================================================== -->
+  <joint name="kiel_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="kiel_link"/>
+    <origin xyz="0.0 0.0 -${-boot_hoehe/2 + kiel_tiefe/2}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="kiel_link">
+    <visual>
+      <origin xyz="0.0 0.0 ${-boot_hoehe/2 + kiel_tiefe/2}" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/keel.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+      <material name="default_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0 0.0 ${-boot_hoehe/2 + kiel_tiefe/2}" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/keel.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <mass value="${kiel_masse}"/>
+      <inertia ixx="0.05" ixy="0.0" ixz="0.0" iyy="0.0" iyz="0.0" izz="0.0"/>
+    </inertial>
+  </link>
+
+  <!-- Balast Gewicht -->
+  <joint name="balast_joint" type="fixed">
+    <parent link="kiel_link"/>
+    <child link="balast_link"/>
+    <origin xyz="0.2 0.0 -${kiel_tiefe/2 + 0.1}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="balast_link">
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.4 0.05 0.1"/>
+      </geometry>
+      <material name="default_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.4 0.05 0.1"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <mass value="25"/>
+      <inertia ixx="${1/12 * 25 * (0.05*0.05 + 0.1*0.1)}" ixy="0.0" ixz="0.0"
+               iyy="${1/12 * 25 * (0.4*0.4 + 0.1*0.1)}" iyz="0.0" 
+               izz="${1/12 * 25 * (0.05*0.05 + 0.4*0.4)}"/>
+    </inertial>
+  </link>
+
+  <!-- =================================================================== -->
+  <!-- 4. Das Segel (Sail)                                                -->
+  <!-- =================================================================== -->
+  <joint name="sail_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="sail_link"/>
+    <origin xyz="0.99628 0.0 0.0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <!-- Wichtig: Gelenkreibung gegen Null setzen (dynamics damping="0.0"), damit es sich frei im Wind bewegt -->
+    <dynamics damping="1.5" friction="0.1"/>
+  </joint>
+
+  <link name="sail_link">
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/sail.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+      <material name="default_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/sail.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="-0.51 0.0 1.35" rpy="0 0 0"/>
+      <mass value="${segel_masse}"/>
+      <inertia ixx="${1/12 * segel_masse * segel_hoehe * segel_hoehe}" ixy="0.0" ixz="0.0" 
+               iyy="${1/12 * segel_masse * (segel_flaeche/segel_hoehe * segel_flaeche/segel_hoehe + segel_hoehe*segel_hoehe)}" iyz="0.0" 
+               izz="${1/12 * segel_masse * segel_flaeche/segel_hoehe * segel_flaeche/segel_hoehe}"/>
+    </inertial>
+  </link>
+
+  <!-- =================================================================== -->
+  <!-- 5. Das Ruder (Rudder)                                              -->
+  <!-- =================================================================== -->
+  <joint name="rudder_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="rudder_link"/>
+    <origin xyz="-0.988233 0.0 0.0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="5.0" friction="0.5"/>
+    <!-- Das Ruder benötigt Stellkraft (effort), um die Position gegen den Wasserdruck zu halten -->
+    <limit lower="-0.78" upper="0.78" effort="50" velocity="1.5"/>
+  </joint>
+
+  <link name="rudder_link">
+    <visual>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/rudder.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+      <material name="default_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Ersetze 'dein_boot_paket' durch den Namen deines ROS-Packages -->
+        <mesh filename="package://opti_description/share/opti_description/meshes/rudder.stl" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="-0.25 0.0 -0.25" rpy="0 0 0"/>
+      <mass value="${ruder_masse}"/>
+      <inertia ixx="${1/12 * ruder_masse * ruder_hoehe * ruder_hoehe}" ixy="0.0" ixz="0.0" 
+               iyy="${1/12 * ruder_masse * 2 * ruder_hoehe * ruder_hoehe}" iyz="0.0" 
+               izz="${1/12 * ruder_masse * ruder_hoehe * ruder_hoehe}"/>
+    </inertial>
+  </link>
+
+</robot>
