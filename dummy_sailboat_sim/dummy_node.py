@@ -11,7 +11,7 @@ from std_srvs.srv import Empty
 
 class DummySailboat(Node):
     def __init__(self):
-        super().__init__('dummy_sailboat_node', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, True)])
+        super().__init__('dummy_sailboat_node', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, False)])
         
         # ==========================================
         # 1. INTERNE ZUSTÄNDE (Physik-Variablen)

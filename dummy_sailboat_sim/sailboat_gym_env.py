@@ -28,7 +28,7 @@ class SailboatEnv(gym.Env):
         # 3. ROS2 Setup
         if not rclpy.ok():
             rclpy.init()
-        self.node = Node('sailboat_gym_interface', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, True)])
+        self.node = Node('sailboat_gym_interface', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, False)])
 
         self.pub_rudder = self.node.create_publisher(Float64, Config.TOPIC_RUDDER_SOLL, 10)
         self.pub_sail = self.node.create_publisher(Float64, Config.TOPIC_SAIL_SOLL, 10)
@@ -165,7 +165,7 @@ class SailboatEnv(gym.Env):
         self.pub_sail.publish(Float64(data=pub_sail_rad))
 
         # Warten, bis die Simulation (Gazebo) wirklich die Zeit STEP_TIME_SEC simuliert hat.
-        # Da wir use_sim_time=True nutzen, ist dies die simulierte Zeit.
+        # Da wir use_sim_time=False nutzen, ist dies die echte Zeit.
         start_time = self.node.get_clock().now()
         import rclpy.duration
         target_time = start_time + rclpy.duration.Duration(seconds=Config.STEP_TIME_SEC)

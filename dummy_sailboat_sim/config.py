@@ -79,10 +79,10 @@ class Config:
 
 
     # ===============================================
-    # 📡 7. ROS TOPICS
-    # ==========================================
-
-    TOPIC_GPS = '/GPS'
+    # 📡 2. ROS2 Topics (Müssen mit Gazebo/Sim-Gruppe matchen)
+    # ===============================================
+    
+    TOPIC_GPS = '/Position'                   # Wurde von der Sim-Gruppe im sensor_transformer.py so benannt
     TOPIC_COMPASS = '/Kompass'
     TOPIC_HEEL = '/Neigung'
     TOPIC_RUDDER_IST = '/Ruderstellung_Ist'

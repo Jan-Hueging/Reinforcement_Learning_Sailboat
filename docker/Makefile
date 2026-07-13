@@ -59,6 +59,10 @@ run-visualizer: _x11_check
 	@echo "📡  Starte Visualizer..."
 	$(COMPOSE) run --rm visualizer
 
+run-bridge:
+	@echo "🌉  Starte ROS-Gazebo Bridge..."
+	$(COMPOSE) run --rm bridge
+
 run-training:
 	@echo "🧠  Starte Training..."
 	$(COMPOSE) run --rm training

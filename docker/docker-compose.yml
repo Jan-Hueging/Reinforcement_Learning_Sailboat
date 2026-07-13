@@ -52,15 +52,15 @@ services:
     <<: *common
     container_name: sailboat_visualizer
     command: >
-      ros2 run dummy_sailboat_sim visualizer
-      --ros-args --log-level WARN
+      bash -c "source /ros2_ws/install/setup.bash && ros2 run dummy_sailboat_sim visualizer"
 
-  # ── KI-Training ─────────────────────────────────────────────
+  # ── KI-Training (inklusive ROS-Gazebo Bridge) ───────────────
   training:
     <<: *common
     container_name: sailboat_training
     command: >
-      python3 src/dummy_sailboat_sim/dummy_sailboat_sim/train.py
+      bash -c "ros2 run ros_gz_bridge parameter_bridge /Segelstellung_Soll@std_msgs/msg/Float64]gz.msgs.Double /Ruderstellung_Soll@std_msgs/msg/Float64]gz.msgs.Double /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock --ros-args --log-level WARN & 
+      python3 src/dummy_sailboat_sim/dummy_sailboat_sim/train.py"
     # Kein Neustart nach normalem Beenden
     restart: "no"
 
